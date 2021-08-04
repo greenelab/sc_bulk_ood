@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-cd "/content/drive/MyDrive/Colab Notebooks/checkouts/sc_bulk_ood"
-
 echo "Ensuring ssh keys exist..."
 
 if [ ! -f "./secrets/id_rsa" ]; then
