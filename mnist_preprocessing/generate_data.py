@@ -5,7 +5,8 @@ import pickle
 num_stacked = 100 # the number of total images stacked on one another
 
 # method to generate a proportion vector
-def gen_prop_vec_unif():
+def gen_prop_vec_unif(num_skip=None):
+  
   rand_vec = [np.random.random_integers(0, num_stacked),
               np.random.random_integers(0, num_stacked),
               np.random.random_integers(0, num_stacked),
@@ -16,6 +17,11 @@ def gen_prop_vec_unif():
               np.random.random_integers(0, num_stacked),
               np.random.random_integers(0, num_stacked),
               np.random.random_integers(0, num_stacked)]
+  
+  # if we want to exclude a number, then we make it zero
+  if num_skip is not None:
+    rand_vec[num_skip] = 0
+
   rand_vec = np.round((rand_vec/np.sum(rand_vec))*num_stacked)
   if(np.sum(rand_vec) != num_stacked):
     idx_change = np.argmax(rand_vec)
@@ -26,8 +32,15 @@ def gen_prop_vec_unif():
   return rand_vec
 
 # method to generate a proportion vector
-def gen_prop_vec_lognormal():
+def gen_prop_vec_lognormal(num_skip=None):
+
+
   rand_vec = np.random.lognormal(5, 3, 10)
+
+  # if we want to exclude a number, then we make it zero
+  if num_skip is not None:
+    rand_vec[num_skip] = 0
+
   rand_vec = np.round((rand_vec/np.sum(rand_vec))*num_stacked)
   if(np.sum(rand_vec) != num_stacked):
     idx_change = np.argmax(rand_vec)
@@ -70,13 +83,13 @@ def gen_prop_num_sum(prop_vec, X_in, Y_in):
 
   return running_sum / 100
 
-def make_stacked_sample(X_in, Y_in):
-  rand_vec = gen_prop_vec_lognormal()
+def make_stacked_sample(X_in, Y_in, num_skip=None):
+  rand_vec = gen_prop_vec_lognormal(num_skip)
   stacked_vec = gen_prop_num_sum(rand_vec, X_in, Y_in)
 
   return (rand_vec, stacked_vec)
 
-def make_all_stacked_samples(X_in, Y_in, out_file, num_samples):
+def make_all_stacked_samples(X_in, Y_in, out_file, num_samples, num_skip=None):
   
   out_path = Path(out_file)
 
@@ -86,10 +99,13 @@ def make_all_stacked_samples(X_in, Y_in, out_file, num_samples):
     X_stack = np.stack(stacked[:,1])
     Y_stack = Y_stack/100
   else: # otherwise generate data
-    stacked = np.stack([make_stacked_sample(X_in, Y_in) for x in range(0, num_samples)])
+    stacked = np.stack([make_stacked_sample(X_in, Y_in, num_skip) for x in range(0, num_samples)])
     Y_stack = np.stack(stacked[:,0])
     X_stack = np.stack(stacked[:,1])
+    pickle.dump( stacked, open( out_path, "wb" ) )
+
     Y_stack = Y_stack/100
+
 
   return (X_stack, Y_stack)
 
