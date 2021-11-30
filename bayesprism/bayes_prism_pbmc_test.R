@@ -4,7 +4,7 @@ require(tidyr)
 
 read_and_format <- function(in_file){
     
-    sc_matr = fread(in_file)
+    sc_matr = fread(in_file, header=T)
     cell_ids = colnames(sc_matr)[2:ncol(sc_matr)]
     sc_matr = data.frame(sc_matr)
     
@@ -33,8 +33,7 @@ run_bayes_prism <- function(in_dir, out_dir, file_id_train, file_id_test, num_sa
     bulk_matr_file = paste0(in_dir, file_id_test, "_cybersort_mix.tsv.gz")
     bulk_ref = read_and_format(bulk_matr_file)
     bulk_ref = data.frame(bulk_ref)
-    rownames(bulk_ref) = paste0("samp_", bulk_ref$gene)
-    bulk_ref <- subset(bulk_ref, select = -c(gene))
+    rownames(bulk_ref) = paste0("samp_", rownames(bulk_ref))
     bulk_ref = as.matrix(bulk_ref)
     
     sc_ref_filtered = cleanup.genes(sc_ref,
@@ -57,6 +56,10 @@ run_bayes_prism <- function(in_dir, out_dir, file_id_train, file_id_test, num_sa
     cell_frac = bp_out$res$final.gibbs.theta
     write.table(cell_frac, curr_out_file, sep="\t", quote=F, row.names = F)
     
+    curr_out_file = paste0(out_dir, "/train-", file_id_train, "-test-", file_id_test, "-bp_", num_samp, "_init.tsv")
+    cell_frac = bp_out$res$first.gibbs.res$gibbs.theta
+    write.table(cell_frac, curr_out_file, sep="\t", quote=F, row.names = F)
+
     out_file = paste0(out_dir, "/train-", file_id_train, "-test-", file_id_test, "-bp_", num_samp, ".rds")
     saveRDS(bp_out, out_file)
     
