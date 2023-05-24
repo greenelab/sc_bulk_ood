@@ -70,7 +70,7 @@ def true_prop_vec(in_adata, num_cells):
   return rand_vec
 
 # total pseudobulk
-def make_prop_and_sum(in_adata, num_samples, num_cells, use_true_prop, cell_noise):
+def make_prop_and_sum(in_adata, num_samples, num_cells, use_true_prop, cell_noise, useSampleNoise=True):
   len_vector = in_adata.obs["scpred_CellType"].unique().shape[0]
 
   # instantiate the expression and proportion vectors
@@ -79,9 +79,6 @@ def make_prop_and_sum(in_adata, num_samples, num_cells, use_true_prop, cell_nois
 
   test_expr = pd.DataFrame(columns = in_adata.var['gene_ids'])
   test_prop = pd.DataFrame(columns = in_adata.obs["scpred_CellType"].unique())
-
-  # sample specific noise
-  sample_noise = np.random.lognormal(0, 1, in_adata.var['gene_ids'].shape[0])  # 0.1
 
 
   # cell specific noise, new noise for each sample
@@ -124,15 +121,18 @@ def make_prop_and_sum(in_adata, num_samples, num_cells, use_true_prop, cell_nois
     sum_over_cells.columns = in_adata.var['gene_ids']
 
     # add sample noise
-    #if not use_true_prop:
-    # sample noise
-    sum_over_cells = np.multiply(sum_over_cells, sample_noise)
-    # library size
-    sum_over_cells = sum_over_cells*np.random.lognormal(0, 0.1, 1)[0]
-    # random variability
-    sum_over_cells = sum_over_cells*np.random.lognormal(0, 0.1, in_adata.var['gene_ids'].shape[0])
-    # add poisson noise
-    sum_over_cells = np.random.poisson(sum_over_cells)[0]
+    if useSampleNoise:
+      sample_noise = np.random.lognormal(0, 1, in_adata.var['gene_ids'].shape[0])  # 0.1
+      sum_over_cells = np.multiply(sum_over_cells, sample_noise)
+      # library size
+      sum_over_cells = sum_over_cells*np.random.lognormal(0, 0.1, 1)[0]
+      # random variability
+      sum_over_cells = sum_over_cells*np.random.lognormal(0, 0.1, in_adata.var['gene_ids'].shape[0])
+      # add poisson noise
+      sum_over_cells = np.random.poisson(sum_over_cells)[0]
+    else:
+      sum_over_cells = sum_over_cells.T
+
 
 
     sum_over_cells = pd.DataFrame(sum_over_cells)
@@ -140,11 +140,11 @@ def make_prop_and_sum(in_adata, num_samples, num_cells, use_true_prop, cell_nois
     sum_over_cells.columns = in_adata.var['gene_ids']
 
     if samp_idx < num_samples:
-      total_prop = total_prop.append(props)
-      total_expr = total_expr.append(sum_over_cells)
+      total_prop = pd.concat([total_prop, props])
+      total_expr = pd.concat([total_expr, sum_over_cells])
     else:
-      test_prop = test_prop.append(props)
-      test_expr = test_expr.append(sum_over_cells)
+      test_prop = pd.concat([test_prop, props])
+      test_expr = pd.concat([test_expr, sum_over_cells])
 
 
   return (total_prop, total_expr, test_prop, test_expr)
@@ -160,7 +160,7 @@ def get_single_celltype_prop_matrix(num_samp, cell_order):
     curr_prop[curr_cell_idx] = 1
 
     curr_cell_prop_df = get_corr_prop_matrix(num_samp, curr_prop, cell_order, min_corr=0.95)
-    total_prop = total_prop.append(curr_cell_prop_df)
+    total_prop = pd.concat([total_prop, curr_cell_prop_df])
 
   return total_prop
 
@@ -179,7 +179,7 @@ def get_corr_prop_matrix(num_samp, real_prop, cell_order, min_corr=0.8):
       props = pd.DataFrame(curr_prop_vec_noise)
       props = props.transpose()
       props.columns = cell_order 
-      total_prop = total_prop.append(props)
+      total_prop = pd.concat([total_prop, props])
 
   return total_prop
 
@@ -198,7 +198,7 @@ def calc_prop(in_adata, cell_order):
   return props
 
 # total pseudobulk
-def use_prop_make_sum(in_adata, num_cells, props_vec, cell_noise, sample_noise=None):
+def use_prop_make_sum(in_adata, num_cells, props_vec, cell_noise, sample_noise=None, useSampleNoise=True):
 
   len_vector = props_vec.shape[1]
   cell_order = props_vec.columns.values.to_list()
@@ -206,10 +206,6 @@ def use_prop_make_sum(in_adata, num_cells, props_vec, cell_noise, sample_noise=N
   # instantiate the expression and proportion vectors
   total_expr = pd.DataFrame(columns = in_adata.var['gene_ids'])
   total_prop = pd.DataFrame(columns = cell_order)
-
-  # sample specific noise
-  if sample_noise is None:
-    sample_noise = np.random.lognormal(0, 1, in_adata.var['gene_ids'].shape[0])  # 0.1
 
 
   # cell specific noise, new noise for each sample
@@ -254,28 +250,25 @@ def use_prop_make_sum(in_adata, num_cells, props_vec, cell_noise, sample_noise=N
     sum_over_cells.columns = in_adata.var['gene_ids']
 
     # add sample noise
-    #if not use_true_prop:
-    # sample noise
-    sum_over_cells = np.multiply(sum_over_cells, sample_noise)
-
-    # library size
-    library_size = np.random.lognormal(0, 0.1, 1)[0]
-    sum_over_cells = sum_over_cells*library_size
-
-    # random variability
-    rand_var = np.random.lognormal(0, 0.1, in_adata.var['gene_ids'].shape[0])
-    sum_over_cells = sum_over_cells*rand_var
-
-    # add poisson noise
-    sum_over_cells = np.random.poisson(sum_over_cells)[0]
+    if useSampleNoise:
+      sample_noise = np.random.lognormal(0, 1, in_adata.var['gene_ids'].shape[0])  # 0.1
+      sum_over_cells = np.multiply(sum_over_cells, sample_noise)
+      # library size
+      sum_over_cells = sum_over_cells*np.random.lognormal(0, 0.1, 1)[0]
+      # random variability
+      sum_over_cells = sum_over_cells*np.random.lognormal(0, 0.1, in_adata.var['gene_ids'].shape[0])
+      # add poisson noise
+      sum_over_cells = np.random.poisson(sum_over_cells)[0]
+    else:
+      sum_over_cells = sum_over_cells.T
 
 
     sum_over_cells = pd.DataFrame(sum_over_cells)
     sum_over_cells = sum_over_cells.T
     sum_over_cells.columns = in_adata.var['gene_ids']
 
-    total_expr = total_expr.append(sum_over_cells)
-    total_prop = total_prop.append(props)
+    total_expr = pd.concat([total_expr, sum_over_cells])
+    total_prop = pd.concat([total_prop, props])
 
 
 
@@ -317,6 +310,45 @@ def read_single_kang_pseudobulk_file(data_path, sample_id, stim_status, isTraini
 
   return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
 
+
+def read_single_kidney_pseudobulk_file(data_path, sample_id, stim_status, isTraining, file_name):
+
+  pseudobulk_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_pseudo_splits.pkl")
+  prop_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_prop_splits.pkl")
+
+  gene_file = os.path.join(data_path, f"{file_name}_genes.pkl")
+  sig_file = os.path.join(data_path, f"{file_name}_sig.pkl")
+
+  pseudobulk_path = Path(pseudobulk_file)
+  prop_path = Path(prop_file)
+  gene_path = Path(gene_file)
+  sig_path = Path(sig_file)
+
+  prop_df = pickle.load( open( prop_path, "rb" ) )
+  pseudobulks_df = pickle.load( open( pseudobulk_path, "rb" ) )
+  gene_df = pickle.load( open( gene_path, "rb" ) )
+  sig_df = pickle.load( open( sig_path, "rb" ) )
+
+  num_samps = pseudobulks_df.shape[0] 
+  samp_type = ["bulk"]*num_samps
+  #if sample_id == "samp1":
+  # 1500 because 15 cell types
+  cell_prop_type = ["random"]*1000+["cell_type_specific"]*1500 
+  samp_type = ["sc_ref"]*2500
+  #elif isTraining == "Train":
+  #  cell_prop_type = ["realistic"]*num_samps
+  #else:
+  #  cell_prop_type = ["realistic"]*100+["cell_type_specific"]*900
+
+  metadata_df = pd.DataFrame(data = {"sample_id":[sample_id]*num_samps, 
+                                    "stim":[stim_status]*num_samps,
+                                    "isTraining":[isTraining]*num_samps,
+                                    "cell_prop_type":cell_prop_type,
+                                    "samp_type":samp_type,})
+
+  return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
+
+
 def read_all_kang_pseudobulk_files(data_path, file_name, num_bulks_training=10):
 
   sample_order = ['1015', '1256', '1488', '1244', '1016', '101', '1039', '107']
@@ -348,6 +380,52 @@ def read_all_kang_pseudobulk_files(data_path, file_name, num_bulks_training=10):
         print(curr_train)
 
         pseudobulks_df, prop_df, gene_df, sig_df, metadata_df = read_single_kang_pseudobulk_file(data_path, curr_samp, curr_stim, curr_train, file_name)
+
+        # subsample the number of bulks used in training
+        if curr_train == "Train":
+          subsamp_idx = np.random.choice(range(pseudobulks_df.shape[0]), num_bulks_training)
+          pseudobulks_df = pseudobulks_df.iloc[subsamp_idx]
+          prop_df = prop_df.iloc[subsamp_idx]
+          metadata_df = metadata_df.iloc[subsamp_idx]
+
+        X_concat = pd.concat([X_concat, pseudobulks_df])
+        Y_concat = pd.concat([Y_concat, prop_df])
+        meta_concat = pd.concat([meta_concat, metadata_df])
+
+  return (X_concat, Y_concat, gene_df, meta_concat)
+
+
+def read_all_kidney_pseudobulk_files(data_path, file_name, num_bulks_training=10):
+
+  sample_order = ['samp1', 'samp2', 'samp3']
+  stim_order = ['STIM', 'CTRL']
+  train_order = ['Train', 'Test']
+
+  X_concat = None
+  Y_concat = None
+  meta_concat = None
+
+
+  for curr_samp in sample_order:
+    if curr_samp == 'samp1':
+      pseudobulks_df, prop_df, gene_df, sig_df, metadata_df = read_single_kidney_pseudobulk_file(data_path, curr_samp, "CTRL", "Train", file_name)
+
+      if X_concat is None:
+        X_concat, Y_concat, meta_concat = pseudobulks_df, prop_df, metadata_df
+      else:
+        X_concat = pd.concat([X_concat, pseudobulks_df])
+        Y_concat = pd.concat([Y_concat, prop_df])
+        meta_concat = pd.concat([meta_concat, metadata_df])
+
+      continue
+    print(curr_samp)
+    for curr_stim in stim_order:
+      print(curr_stim)
+
+      for curr_train in train_order:
+        print(curr_train)
+
+        pseudobulks_df, prop_df, gene_df, sig_df, metadata_df = read_single_kidney_pseudobulk_file(data_path, curr_samp, curr_stim, curr_train, file_name)
 
         # subsample the number of bulks used in training
         if curr_train == "Train":
