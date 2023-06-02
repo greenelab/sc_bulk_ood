@@ -117,8 +117,8 @@ def make_prop_and_sum(in_adata, num_samples, num_cells, use_true_prop, cell_nois
       sum_over_cells = sum_over_cells + ct_sum
 
 
-    sum_over_cells = pd.DataFrame(sum_over_cells)
-    sum_over_cells.columns = in_adata.var['gene_ids']
+    #sum_over_cells = pd.DataFrame(sum_over_cells)
+    #sum_over_cells.columns = in_adata.var['gene_ids']
 
     # add sample noise
     if useSampleNoise:
@@ -243,11 +243,11 @@ def use_prop_make_sum(in_adata, num_cells, props_vec, cell_noise, sample_noise=N
       sum_over_cells = sum_over_cells + ct_sum
 
 
-    sum_over_cells = pd.DataFrame(sum_over_cells)
-    sum_over_cells.columns = in_adata.var['gene_ids']
+    #sum_over_cells = pd.DataFrame(sum_over_cells)
+    #sum_over_cells.columns = in_adata.var['gene_ids']
 
-    sum_over_cells = pd.DataFrame(sum_over_cells)
-    sum_over_cells.columns = in_adata.var['gene_ids']
+    #sum_over_cells = pd.DataFrame(sum_over_cells)
+    #sum_over_cells.columns = in_adata.var['gene_ids']
 
     # add sample noise
     if useSampleNoise:
@@ -309,6 +309,110 @@ def read_single_kang_pseudobulk_file(data_path, sample_id, stim_status, isTraini
                                     "samp_type":samp_type,})
 
   return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
+
+
+def read_single_liver_pseudobulk_file(data_path, sample_id, stim_status, isTraining, file_name):
+
+  pseudobulk_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_pseudo_splits.pkl")
+  prop_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_prop_splits.pkl")
+
+  gene_file = os.path.join(data_path, f"{file_name}_genes.pkl")
+  sig_file = os.path.join(data_path, f"{file_name}_sig.pkl")
+
+  pseudobulk_path = Path(pseudobulk_file)
+  prop_path = Path(prop_file)
+  gene_path = Path(gene_file)
+  sig_path = Path(sig_file)
+
+  prop_df = pickle.load( open( prop_path, "rb" ) )
+  pseudobulks_df = pickle.load( open( pseudobulk_path, "rb" ) )
+  gene_df = pickle.load( open( gene_path, "rb" ) )
+  sig_df = pickle.load( open( sig_path, "rb" ) )
+
+  num_samps = pseudobulks_df.shape[0] 
+  samp_type = ["bulk"]*num_samps
+  #if sample_id == "samp1":
+  # 700 because 7 cell types
+  cell_prop_type = ["random"]*1000+["cell_type_specific"]*700 
+  samp_type = ["sc_ref"]*1700
+  #elif isTraining == "Train":
+  #  cell_prop_type = ["realistic"]*num_samps
+  #else:
+  #  cell_prop_type = ["realistic"]*100+["cell_type_specific"]*900
+
+  metadata_df = pd.DataFrame(data = {"sample_id":[sample_id]*num_samps, 
+                                    "stim":[stim_status]*num_samps,
+                                    "isTraining":[isTraining]*num_samps,
+                                    "cell_prop_type":cell_prop_type,
+                                    "samp_type":samp_type,})
+
+  return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
+
+
+
+def read_single_covid_pseudobulk_file(data_path, sample_id, stim_status, isTraining, file_name):
+
+  pseudobulk_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_pseudo_splits.pkl")
+  prop_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_prop_splits.pkl")
+
+  gene_file = os.path.join(data_path, f"{file_name}_genes.pkl")
+  sig_file = os.path.join(data_path, f"{file_name}_sig.pkl")
+
+  pseudobulk_path = Path(pseudobulk_file)
+  prop_path = Path(prop_file)
+  gene_path = Path(gene_file)
+  sig_path = Path(sig_file)
+
+  prop_df = pickle.load( open( prop_path, "rb" ) )
+  pseudobulks_df = pickle.load( open( pseudobulk_path, "rb" ) )
+  gene_df = pickle.load( open( gene_path, "rb" ) )
+  sig_df = pickle.load( open( sig_path, "rb" ) )
+
+  num_samps = pseudobulks_df.shape[0] 
+  samp_type = ["bulk"]*num_samps
+  #if sample_id == "samp1":
+  # 1500 because 15 cell types
+  cell_prop_type = ["random"]*1000+["cell_type_specific"]*1300 
+  samp_type = ["sc_ref"]*2300
+  #elif isTraining == "Train":
+  #  cell_prop_type = ["realistic"]*num_samps
+  #else:
+  #  cell_prop_type = ["realistic"]*100+["cell_type_specific"]*900
+
+  metadata_df = pd.DataFrame(data = {"sample_id":[sample_id]*num_samps, 
+                                    "stim":[stim_status]*num_samps,
+                                    "isTraining":[isTraining]*num_samps,
+                                    "cell_prop_type":cell_prop_type,
+                                    "samp_type":samp_type,})
+
+  return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
+
+
+def read_all_covid_pseudobulk_files(data_path, file_name):
+
+  sample_order = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6']
+  stim_order = ['CTRL']
+  train_order = ['Train']
+
+  X_concat = None
+  Y_concat = None
+  meta_concat = None
+
+
+  for curr_samp in sample_order:
+        
+      pseudobulks_df, prop_df, gene_df, sig_df, metadata_df = read_single_covid_pseudobulk_file(data_path, curr_samp, "CTRL", 'Train', file_name)
+
+      if X_concat is None:
+        X_concat, Y_concat, meta_concat = pseudobulks_df, prop_df, metadata_df
+      else:
+        X_concat = pd.concat([X_concat, pseudobulks_df])
+        Y_concat = pd.concat([Y_concat, prop_df])
+        meta_concat = pd.concat([meta_concat, metadata_df])
+
+
+  return (X_concat, Y_concat, gene_df, meta_concat)
+
 
 
 def read_single_kidney_pseudobulk_file(data_path, sample_id, stim_status, isTraining, file_name):
