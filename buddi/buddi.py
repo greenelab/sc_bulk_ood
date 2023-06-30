@@ -431,7 +431,7 @@ def calc_buddi_perturbation(meta_df, X_full, Y_full, scaler,
     return (temp_meta_df, decoded_0_0, decoded_0_1, top_genes)
 
 
-def train_buddi(res_data_path, exp_id, use_buddi4, n_cell_types, n_pseudobulk_rand, n_pseudobulk_ct, 
+def train_buddi(res_data_path, exp_id, use_buddi4, 
                 n_tot_samples, n_drugs, n_tech, 
                 X_unkp, label_unkp, drug_unkp, bulk_unkp,
                 X_kp, y_kp, label_kp, drug_kp, bulk_kp,

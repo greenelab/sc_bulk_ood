@@ -72,13 +72,7 @@ def fit_model(known_prop_vae, unknown_prop_vae, encoder_unlab, encoder_lab, deco
     train_size_samp = batch_size*train_size_samp_batch
     train_size_samp = train_size_samp.astype(int)
 
-    test_size_samp = np.maximum(len(unkp_idx_test), len(kp_idx_test))
-    if test_size_samp < batch_size:
-        test_size_samp = batch_size
-    else:
-        test_size_samp_batch = np.ceil(test_size_samp/batch_size)
-        test_size_samp = batch_size*test_size_samp_batch
-        test_size_samp = test_size_samp.astype(int)
+    test_size_samp = batch_size
 
     print(f"test_size_samp: {test_size_samp}")
     print(f"train_size_samp: {train_size_samp}")

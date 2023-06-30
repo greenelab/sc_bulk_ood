@@ -27,6 +27,13 @@ def get_cell_type_sum(in_adata, cell_type_id, num_samples):
   # get the expression of the cells of interest
   cell_df = in_adata[in_adata.obs["scpred_CellType"].isin([cell_type_id])]
 
+  # if there is none of the cell type, 
+  # just get the first elements and we will return zero
+  mult_by_zero = False
+  if len(cell_df) == 0:
+    cell_df = in_adata[0:2]
+    mult_by_zero = True
+
   # now to the sampling
   cell_sample = sk.utils.resample(cell_df, n_samples = num_samples, replace=True)
 
@@ -36,6 +43,10 @@ def get_cell_type_sum(in_adata, cell_type_id, num_samples):
   #dense_X = dense_X + noise_mask
 
   sum_per_gene = cell_sample.X.sum(axis=0)
+
+  # set to zero
+  if mult_by_zero:
+    sum_per_gene = sum_per_gene*0
 
 
   return sum_per_gene
@@ -148,6 +159,21 @@ def make_prop_and_sum(in_adata, num_samples, num_cells, use_true_prop, cell_nois
 
 
   return (total_prop, total_expr, test_prop, test_expr)
+
+def get_only1_celltype_prop_matrix(num_samp, cell_order):
+  num_celltypes = len(cell_order)  
+
+  total_prop = pd.DataFrame(columns = cell_order)
+
+
+  for curr_cell_idx in range(num_celltypes):
+    curr_prop = [0]*num_celltypes
+    curr_prop[curr_cell_idx] = 1
+
+    curr_cell_prop_df = get_corr_prop_matrix(num_samp, curr_prop, cell_order, min_corr=0.95)
+    total_prop = pd.concat([total_prop, curr_cell_prop_df])
+
+  return total_prop
 
 def get_single_celltype_prop_matrix(num_samp, cell_order):
   num_celltypes = len(cell_order)  
@@ -311,6 +337,40 @@ def read_single_kang_pseudobulk_file(data_path, sample_id, stim_status, isTraini
   return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
 
 
+def read_single_pseudobulk_file(data_path, sample_id, stim_status, isTraining, file_name, num_rand_pseudo, num_ct_pseudo):
+
+  pseudobulk_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_pseudo_splits.pkl")
+  prop_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_prop_splits.pkl")
+
+  gene_file = os.path.join(data_path, f"{file_name}_genes.pkl")
+  sig_file = os.path.join(data_path, f"{file_name}_sig.pkl")
+
+  pseudobulk_path = Path(pseudobulk_file)
+  prop_path = Path(prop_file)
+  gene_path = Path(gene_file)
+  sig_path = Path(sig_file)
+
+  prop_df = pickle.load( open( prop_path, "rb" ) )
+  pseudobulks_df = pickle.load( open( pseudobulk_path, "rb" ) )
+  gene_df = pickle.load( open( gene_path, "rb" ) )
+  sig_df = pickle.load( open( sig_path, "rb" ) )
+
+  num_samps = pseudobulks_df.shape[0] 
+  samp_type = ["bulk"]*num_samps
+  cell_prop_type = ["random"]*num_rand_pseudo+["cell_type_specific"]*num_ct_pseudo 
+  samp_type = ["sc_ref"]*(num_rand_pseudo+num_ct_pseudo)
+  
+  
+  metadata_df = pd.DataFrame(data = {"sample_id":[sample_id]*num_samps, 
+                                    "stim":[stim_status]*num_samps,
+                                    "isTraining":[isTraining]*num_samps,
+                                    "cell_prop_type":cell_prop_type,
+                                    "samp_type":samp_type,})
+
+  return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
+
+
+
 def read_single_liver_pseudobulk_file(data_path, sample_id, stim_status, isTraining, file_name):
 
   pseudobulk_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_pseudo_splits.pkl")
@@ -332,9 +392,9 @@ def read_single_liver_pseudobulk_file(data_path, sample_id, stim_status, isTrain
   num_samps = pseudobulks_df.shape[0] 
   samp_type = ["bulk"]*num_samps
   #if sample_id == "samp1":
-  # 700 because 7 cell types
-  cell_prop_type = ["random"]*1000+["cell_type_specific"]*700 
-  samp_type = ["sc_ref"]*1700
+  # 800 because 8 cell types
+  cell_prop_type = ["random"]*1000+["cell_type_specific"]*800 
+  samp_type = ["sc_ref"]*1800
   #elif isTraining == "Train":
   #  cell_prop_type = ["realistic"]*num_samps
   #else:
