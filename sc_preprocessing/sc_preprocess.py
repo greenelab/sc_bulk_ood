@@ -513,7 +513,7 @@ def read_single_kidney_pseudobulk_file(data_path, sample_id, stim_status, isTrai
   return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
 
 
-def read_all_kang_pseudobulk_files(data_path, file_name, num_bulks_training=10):
+def read_all_kang_pseudobulk_files(data_path, file_name, num_bulks_training=10, seed=10):
 
   sample_order = ['1015', '1256', '1488', '1244', '1016', '101', '1039', '107']
   stim_order = ['STIM', 'CTRL']
@@ -522,6 +522,7 @@ def read_all_kang_pseudobulk_files(data_path, file_name, num_bulks_training=10):
   X_concat = None
   Y_concat = None
   meta_concat = None
+
 
 
   for curr_samp in sample_order:
@@ -547,6 +548,7 @@ def read_all_kang_pseudobulk_files(data_path, file_name, num_bulks_training=10):
 
         # subsample the number of bulks used in training
         if curr_train == "Train":
+          np.random.seed(seed)
           subsamp_idx = np.random.choice(range(pseudobulks_df.shape[0]), num_bulks_training)
           pseudobulks_df = pseudobulks_df.iloc[subsamp_idx]
           prop_df = prop_df.iloc[subsamp_idx]

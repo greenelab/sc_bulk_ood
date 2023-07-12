@@ -44,6 +44,25 @@ import os
 import pickle
 from pathlib import Path
 
+
+def plot_cell_specific_corr(xval, yval, ax, title, xlab, ylab, class_id):
+
+    plot_df = pd.DataFrame(list(zip(xval, yval)))
+    plot_df.columns = [xlab, ylab]
+
+    g = sns.scatterplot(
+        x=xlab, y=ylab,
+        data=plot_df,ax=ax,
+        hue=class_id
+    )
+    g.set(ylim=(0, 1))
+    g.set(xlim=(0, 1))
+    g.plot([0, 1], [0, 1], transform=g.transAxes)
+
+    ax.set_title(title)
+    return g
+
+
 # for each sample calculate the transformation / projection in PCA space
 
 def get_samp_transform_vec_VAE(X_full, meta_df, start_samp, end_samp, encoder, decoder, batch_size):
@@ -356,73 +375,6 @@ def calc_CVAE_perturbation(X_full, meta_df, encoder, decoder,
     return (ctrl_test_meta_df, decoded_0_0, decoded_0_1)
 
 
-def calc_buddi_perturbation(meta_df, X_full, scaler, classifier, encoder_unlab, decoder, batch_size):
-
-    # get the perturbation latent code
-    idx_stim_test = np.logical_and(meta_df.stim == "STIM", meta_df.isTraining == "Test")
-    idx_stim_test = np.where(idx_stim_test)[0]
-    stim_test_meta_df = meta_df.iloc[idx_stim_test]
-
-    # duplicate to we have correct batch size
-    len_stim_test = len(idx_stim_test)
-    idx_stim_test = np.tile(idx_stim_test, 5)
-
-    X_pert = np.copy(X_full)
-    X_pert = X_pert[idx_stim_test,]
-
-    prop_outputs = classifier.predict(X_pert, batch_size=batch_size)
-    Y_pert = np.copy(prop_outputs)
-    Y_pert = np.argmax(Y_pert, axis=1)
-
-    z_slack, mu_slack, l_sigma_slack, z_rot, mu_rot, l_sigma_rot, z_drug_perturb, mu_drug, l_sigma_drug = encoder_unlab.predict(X_pert, batch_size=batch_size)
-
-    # get the original perturbation output
-    z_concat_perturb = np.hstack([z_slack, prop_outputs, z_rot, z_drug_perturb])
-    decoded_1_1 = decoder.predict(z_concat_perturb, batch_size=batch_size)
-    decoded_1_1 = scaler.inverse_transform(decoded_1_1)
-    decoded_1_1 = decoded_1_1[range(len_stim_test),]
-
-    # now get ctrl test cells
-    idx_ctrl_test = np.logical_and(meta_df.stim == "CTRL", meta_df.isTraining == "Test")
-    idx_ctrl_test = np.where(idx_ctrl_test)[0]
-    ctrl_test_meta_df = meta_df.iloc[idx_ctrl_test]
-
-
-    # duplicate to we have correct batch size
-    len_ctrl_test = len(idx_ctrl_test)
-    idx_ctrl_test = np.tile(idx_ctrl_test, 5)
-
-
-    X_temp = np.copy(X_full)
-    X_temp = X_temp[idx_ctrl_test,]
-
-    prop_outputs = classifier.predict(X_temp, batch_size=batch_size)
-    Y_temp = np.copy(prop_outputs)
-    Y_temp = np.argmax(Y_temp, axis=1)
-
-    # get the perturbation latent code
-
-    # now get each of the latent codes
-    z_slack, mu_slack, l_sigma_slack, z_rot, mu_rot, l_sigma_rot, z_drug, mu_drug, l_sigma_drug = encoder_unlab.predict(X_temp, batch_size=batch_size)
-
-    # get the stim latent codes
-    z_drug_perturb = z_drug_perturb[np.random.choice(z_drug_perturb.shape[0], X_temp.shape[0], replace=True)]
-
-
-    # now concatenate together and add the stim codes to the latent
-    z_concat_unlab_perturb = np.hstack([z_slack, prop_outputs, z_rot, z_drug_perturb])
-    decoded_0_1 = decoder.predict(z_concat_unlab_perturb, batch_size=batch_size)
-    decoded_0_1 = scaler.inverse_transform(decoded_0_1)
-    decoded_0_1 = decoded_0_1[range(len_stim_test),]
-
-    # now concatenate together and add the stim codes to the latent
-    z_concat_unlab_perturb = np.hstack([z_slack, prop_outputs, z_rot, z_drug])
-    decoded_0_0 = decoder.predict(z_concat_unlab_perturb, batch_size=batch_size)
-    decoded_0_0 = scaler.inverse_transform(decoded_0_0)
-    decoded_0_0 = decoded_0_0[range(len_ctrl_test),]
-
-    return (stim_test_meta_df, ctrl_test_meta_df, decoded_1_1, decoded_0_1, decoded_0_0)
-
 def subset_sample_celltype_perturbation(X_full, decoded_0_0, decoded_0_1, scaler, samp_interest, cell_prop_type, meta_df, ctrl_test_meta_df, cell_type_interest=None):
 
     # get the real data
@@ -452,7 +404,7 @@ def subset_sample_celltype_perturbation(X_full, decoded_0_0, decoded_0_1, scaler
     # get the reconstructed 
     recon_Zstim_idx = np.logical_and(ctrl_test_meta_df.stim == "CTRL", ctrl_test_meta_df.isTraining == "Test")
     recon_Zstim_idx = np.logical_and(recon_Zstim_idx, ctrl_test_meta_df.cell_prop_type == cell_prop_type)
-    #recon_Zstim_idx = np.logical_and(recon_Zstim_idx, ctrl_test_meta_df.sample_id == samp_interest)
+    recon_Zstim_idx = np.logical_and(recon_Zstim_idx, ctrl_test_meta_df.sample_id == samp_interest)
     if cell_type_interest is not None:
         recon_Zstim_idx = np.logical_and(recon_Zstim_idx, ctrl_test_meta_df.Y_max == cell_type_interest)
     recon_Zstim_idx = np.where(recon_Zstim_idx)[0]
@@ -527,14 +479,14 @@ def get_pca_for_plotting(encodings):
     plot_df.columns = ['PCA_0', 'PCA_1']
     return plot_df
 
-def plot_pca(plot_df, color_vec, ax, title="", alpha=0.1):
+def plot_pca(plot_df, color_vec, ax, title="", alpha=0.1, legend_title="Y"):
 
-    plot_df['Y'] = color_vec
+    plot_df[legend_title] = color_vec
 
     g = sns.scatterplot(
         x="PCA_0", y="PCA_1",
         data=plot_df,
-        hue="Y",
+        hue=legend_title,
         palette=sns.color_palette("hls", len(np.unique(color_vec))),
         legend="full",
         alpha=alpha, ax= ax
@@ -555,14 +507,14 @@ def get_tsne_for_plotting(encodings):
     plot_df.columns = ['tsne_0', 'tsne_1']
     return plot_df
 
-def plot_tsne(plot_df, color_vec, ax, title=""):
+def plot_tsne(plot_df, color_vec, ax, title="", alpha=0.1, legend_title="Y"):
 
-    plot_df['Y'] = color_vec
+    plot_df[legend_title] = color_vec
 
     g = sns.scatterplot(
         x="tsne_0", y="tsne_1",
         data=plot_df,
-        hue="Y",
+        hue=legend_title,
         palette=sns.color_palette("hls", len(np.unique(color_vec))),
         legend="full",
         alpha=0.3, ax= ax
@@ -585,14 +537,14 @@ def get_umap_for_plotting(encodings):
     plot_df.columns = ['umap_0', 'umap_1']
     return plot_df
 
-def plot_umap(plot_df, color_vec, ax, title="", alpha=0.3):
+def plot_umap(plot_df, color_vec, ax, title="", alpha=0.3, legend_title="Y"):
 
-    plot_df['Y'] = color_vec
+    plot_df[legend_title] = color_vec
 
     g = sns.scatterplot(
         x="umap_0", y="umap_1",
         data=plot_df,
-        hue="Y",
+        hue=legend_title,
         palette=sns.color_palette("hls", len(np.unique(color_vec))),
         legend="full",
         alpha=alpha, ax= ax
