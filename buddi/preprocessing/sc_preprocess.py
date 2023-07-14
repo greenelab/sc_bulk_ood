@@ -190,6 +190,32 @@ def get_single_celltype_prop_matrix(num_samp, cell_order):
 
   return total_prop
 
+
+def get_random_prop_matrix(num_samp, cell_order, num_cells_samp=5000):
+
+  # now generate all the proportions
+  total_prop = pd.DataFrame(columns = cell_order)
+
+  while total_prop.shape[0] < num_samp:
+    ## generate the proportions matrix
+
+    rand_vec = np.random.lognormal(5, np.random.uniform(1,3), len(cell_order)) # 1
+
+    rand_vec = np.round((rand_vec/np.sum(rand_vec))*num_cells_samp)
+    if(np.sum(rand_vec) != num_cells_samp):
+        idx_change = np.argmax(rand_vec)
+        rand_vec[idx_change] = rand_vec[idx_change] + (num_cells_samp - np.sum(rand_vec))
+
+    rand_vec = np.asarray(rand_vec/np.sum(rand_vec))
+
+    props = pd.DataFrame(rand_vec)
+    props = props.transpose()
+    props.columns = cell_order 
+    total_prop = pd.concat([total_prop, props])
+
+  return total_prop
+
+
 def get_corr_prop_matrix(num_samp, real_prop, cell_order, min_corr=0.8):
 
   # now generate all the proportions
@@ -327,6 +353,38 @@ def read_single_kang_pseudobulk_file(data_path, sample_id, stim_status, isTraini
     cell_prop_type = ["realistic"]*num_samps
   else:
     cell_prop_type = ["realistic"]*100+["cell_type_specific"]*1000
+
+  metadata_df = pd.DataFrame(data = {"sample_id":[sample_id]*num_samps, 
+                                    "stim":[stim_status]*num_samps,
+                                    "isTraining":[isTraining]*num_samps,
+                                    "cell_prop_type":cell_prop_type,
+                                    "samp_type":samp_type,})
+
+  return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
+
+
+def read_single_kang_pseudobulk_file_toy_example(data_path, sample_id, stim_status, isTraining, file_name):
+
+  pseudobulk_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_pseudo_splits.pkl")
+  prop_file = os.path.join(data_path, f"{file_name}_{sample_id}_{stim_status}_{isTraining}_prop_splits.pkl")
+
+  gene_file = os.path.join(data_path, f"{file_name}_genes.pkl")
+  sig_file = os.path.join(data_path, f"{file_name}_sig.pkl")
+
+  pseudobulk_path = Path(pseudobulk_file)
+  prop_path = Path(prop_file)
+  gene_path = Path(gene_file)
+  sig_path = Path(sig_file)
+
+  prop_df = pickle.load( open( prop_path, "rb" ) )
+  pseudobulks_df = pickle.load( open( pseudobulk_path, "rb" ) )
+  gene_df = pickle.load( open( gene_path, "rb" ) )
+  sig_df = pickle.load( open( sig_path, "rb" ) )
+
+  num_samps = pseudobulks_df.shape[0] 
+  samp_type = ["bulk"]*num_samps
+  cell_prop_type = ["random"]*1000+["cell_type_specific"]*1000
+  samp_type = ["sc_ref"]*2000
 
   metadata_df = pd.DataFrame(data = {"sample_id":[sample_id]*num_samps, 
                                     "stim":[stim_status]*num_samps,
@@ -511,6 +569,36 @@ def read_single_kidney_pseudobulk_file(data_path, sample_id, stim_status, isTrai
                                     "samp_type":samp_type,})
 
   return (pseudobulks_df, prop_df, gene_df, sig_df, metadata_df)
+
+
+def read_all_kang_pseudobulk_files_toy_example(data_path, file_name):
+
+  sample_order = ['1015', '1256']
+  stim_order = ['STIM', 'CTRL']
+  train_order = ['Train', 'Test']
+
+  X_concat = None
+  Y_concat = None
+  meta_concat = None
+
+  #np.random.seed(seed)
+
+  for curr_samp in sample_order:
+
+    print(curr_samp)
+    for curr_stim in stim_order:
+      print(curr_stim)
+
+      for curr_train in train_order:
+        print(curr_train)
+
+        pseudobulks_df, prop_df, gene_df, sig_df, metadata_df = read_single_kang_pseudobulk_file_toy_example(data_path, curr_samp, curr_stim, curr_train, file_name)
+
+        X_concat = pd.concat([X_concat, pseudobulks_df])
+        Y_concat = pd.concat([Y_concat, prop_df])
+        meta_concat = pd.concat([meta_concat, metadata_df])
+
+  return (X_concat, Y_concat, gene_df, meta_concat)
 
 
 def read_all_kang_pseudobulk_files(data_path, file_name, num_bulks_training=10, seed=10):

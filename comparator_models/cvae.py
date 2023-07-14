@@ -130,17 +130,17 @@ def plot_reconstruction_cvae(encoder, decoder,
     # now use the encoder to get the latent spaces
     if use_cvae4:
         # now use the encoder to get the latent spaces
-        mu_slack = encoder.predict([X_temp, label_temp, bulk_temp, perturb_temp], batch_size=batch_size)
+        z_slack = encoder.predict([X_temp, label_temp, bulk_temp, perturb_temp], batch_size=batch_size)
 
         # now concatenate together
-        z_concat = np.hstack([mu_slack, label_temp, bulk_temp, perturb_temp])
+        z_concat = np.hstack([z_slack, label_temp, bulk_temp, perturb_temp])
 
     else:
         # now use the encoder to get the latent spaces
-        mu_slack = encoder.predict([X_temp, label_temp, perturb_temp], batch_size=batch_size)
+        z_slack = encoder.predict([X_temp, label_temp, perturb_temp], batch_size=batch_size)
 
         # now concatenate together
-        z_concat = np.hstack([mu_slack, label_temp, perturb_temp])
+        z_concat = np.hstack([z_slack, label_temp, perturb_temp])
 
 
 
@@ -219,14 +219,125 @@ def calc_CVAE_perturbation(X_full, Y_full, meta_df, encoder, decoder,
     # now put it all together
     ######
 
-    mu_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, perturbed_code], batch_size=batch_size)
-    z_concat = np.hstack([mu_slack, sample_code, bulk_code, perturbed_code])
+    z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, perturbed_code], batch_size=batch_size)
+    z_concat = np.hstack([z_slack, sample_code, bulk_code, perturbed_code])
     decoded_0_1 = decoder.predict(z_concat, batch_size=batch_size)
     decoded_0_1 = scaler.inverse_transform(decoded_0_1)
 
 
-    mu_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, unperturbed_code], batch_size=batch_size)
-    z_concat = np.hstack([mu_slack, sample_code, bulk_code, unperturbed_code])
+    z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, unperturbed_code], batch_size=batch_size)
+    z_concat = np.hstack([z_slack, sample_code, bulk_code, unperturbed_code])
+    decoded_0_0 = decoder.predict(z_concat, batch_size=batch_size)
+    decoded_0_0 = scaler.inverse_transform(decoded_0_0)
+
+    ######
+    # now get DE genes
+    ######
+
+    top_genes = {}
+    de_genes_all = None
+    for curr_cell_type in Y_full.columns:
+
+
+        # this is for the "projected" expression
+        curr_idx = np.where(ctrl_test_meta_df.Y_max == curr_cell_type)[0]
+        proj_ctrl = decoded_0_0[curr_idx]
+        proj_stim = decoded_0_1[curr_idx]
+
+        # take the median for nomalization
+
+        proj_ctrl = np.median(rankdata(proj_ctrl, axis=1), axis=0)
+        proj_stim = np.median(rankdata(proj_stim, axis=1), axis=0)
+        #proj_ctrl = np.median(proj_ctrl, axis=0)
+        #proj_stim = np.median(proj_stim, axis=0)
+        proj_log2FC = np.abs(proj_stim-proj_ctrl)
+
+        # make into DF
+        proj_log2FC_df = pd.DataFrame(proj_log2FC, index=genes_ordered)
+
+        intersect_proj = proj_log2FC_df.loc[genes_ordered][0]
+        #top_proj_genes = intersect_proj.index[np.argsort(np.abs(intersect_proj))].tolist()[::-1][0:top_lim]
+        top_proj_genes = intersect_proj.index[np.argsort(np.abs(intersect_proj))].tolist()[0:top_lim]
+
+        top_genes[curr_cell_type] = top_proj_genes
+
+    return (ctrl_test_meta_df, decoded_0_0, decoded_0_1, top_genes)
+
+
+def calc_CVAE_perturbation_sample_specific(X_full, Y_full,
+                            meta_df, encoder, decoder, 
+                            scaler, batch_size, 
+                            label_1hot_full, index_label, Label_full,
+                            bulk_1hot_full, drug_1hot_full,
+                            genes_ordered, top_lim=100):
+
+
+    label_1hot_temp = np.copy(label_1hot_full)
+    bulk_1hot_temp = np.copy(bulk_1hot_full)
+    perturb_1hot_temp = np.copy(drug_1hot_full)
+
+
+    # get the single cell data 
+    idx_sc_ref = np.logical_and(meta_df.stim == "CTRL", meta_df.isTraining == "Train")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.samp_type == "sc_ref")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.cell_prop_type == "cell_type_specific")
+    idx_sc_ref = np.where(idx_sc_ref)[0]
+    idx_sc_ref = idx_sc_ref[range(1000)] # dont use the other sc ref
+
+    ## this is to match up sample amounts across samples
+    idx_sc_ref = np.tile(idx_sc_ref, 12) 
+
+
+
+    X_sc_ref = np.copy(X_full)
+    X_sc_ref = X_sc_ref[idx_sc_ref,]
+
+    # get the sample_ids we will perturb
+    sample_interest = ['1488', '1244', '1016', '101', '1039', '107']
+    sample_code_idx = np.logical_and(meta_df.cell_prop_type == "cell_type_specific", 
+                                        np.isin(meta_df.sample_id, sample_interest))
+    sample_code_idx = np.where(sample_code_idx)[0]
+    sample_code = label_1hot_temp[sample_code_idx]
+
+    # make the metadata file
+    ctrl_test_meta_df = meta_df.copy()
+    ctrl_test_meta_df = ctrl_test_meta_df.iloc[idx_sc_ref]
+    ctrl_test_meta_df.isTraining = "Test"
+    ctrl_test_meta_df.stim = "CTRL"
+
+    ctrl_test_meta_df.sample_id = index_label[Label_full][sample_code_idx]
+
+
+    # get the bulk code
+    idx_bulk = np.where(meta_df.samp_type == "bulk")[0]
+    idx_bulk = np.random.choice(idx_bulk, 6000, replace=True) 
+    idx_bulk = np.tile(idx_bulk, 2)
+    bulk_code = bulk_1hot_temp[idx_bulk]
+
+    #####
+    # get (un)perturbed latent codes
+    #####
+    idx_stim = np.where(meta_df.stim == "STIM")[0][range(6000)]
+    idx_stim = np.tile(idx_stim, 2)
+    perturbed_code = perturb_1hot_temp[idx_stim]
+
+    idx_ctrl = np.where(meta_df.stim == "CTRL")[0][range(6000)]
+    idx_ctrl = np.tile(idx_ctrl, 2)
+    unperturbed_code = perturb_1hot_temp[idx_ctrl]
+
+
+    ######
+    # now put it all together
+    ######
+
+    z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, perturbed_code], batch_size=batch_size)
+    z_concat = np.hstack([z_slack, sample_code, bulk_code, perturbed_code])
+    decoded_0_1 = decoder.predict(z_concat, batch_size=batch_size)
+    decoded_0_1 = scaler.inverse_transform(decoded_0_1)
+
+
+    z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, unperturbed_code], batch_size=batch_size)
+    z_concat = np.hstack([z_slack, sample_code, bulk_code, unperturbed_code])
     decoded_0_0 = decoder.predict(z_concat, batch_size=batch_size)
     decoded_0_0 = scaler.inverse_transform(decoded_0_0)
 
@@ -317,8 +428,8 @@ def train_cvae(res_data_path, exp_id, use_cvae4,
     test_size_samp = params.batch_size*test_size_samp_batch
     test_size_samp = test_size_samp.astype(int)
 
-    idx_train = np.random.choice(idx_train, train_size_samp, replace=True)
-    idx_test = np.random.choice(idx_test, test_size_samp, replace=True)
+    idx_train = np.random.choice(idx_train, train_size_samp*5, replace=True)
+    idx_test = np.random.choice(idx_test, test_size_samp*5, replace=True)
 
     cvae_hist = cvae.fit([X_cvae[idx_train], 
                       label_cvae[idx_train], 

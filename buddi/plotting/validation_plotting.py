@@ -79,11 +79,38 @@ def get_samp_transform_vec_VAE(X_full, meta_df, start_samp, end_samp, encoder, d
 
     X_start = X_full[idx_start_train]
     mu_slack, z_slack = encoder.predict(X_start, batch_size=batch_size)
-    train_start = decoder.predict(mu_slack, batch_size=batch_size)
+    train_start = decoder.predict(z_slack, batch_size=batch_size)
 
     X_end = X_full[idx_end_train]
     mu_slack, z_slack = encoder.predict(X_end, batch_size=batch_size)
-    train_end = decoder.predict(mu_slack, batch_size=batch_size)
+    train_end = decoder.predict(z_slack, batch_size=batch_size)
+
+
+    train_start_med = np.median(train_start, axis=0)
+    train_end_med = np.median(train_end, axis=0)
+
+    proj_train = train_start_med - train_end_med
+    return proj_train
+
+def get_samp_transform_vec_VAE_new(X_full, meta_df, start_samp, end_samp, encoder, decoder, batch_size):
+    # get the perturbation latent code
+    idx_start_train = np.logical_and(meta_df.stim == "CTRL", meta_df.isTraining == "Train")
+    idx_start_train = np.logical_and(idx_start_train, meta_df.sample_id == start_samp)
+    idx_start_train = np.where(idx_start_train)[0]
+
+
+    idx_end_train = np.logical_and(meta_df.stim == "CTRL", meta_df.isTraining == "Train")
+    idx_end_train = np.logical_and(idx_end_train, meta_df.sample_id == end_samp)
+    idx_end_train = np.where(idx_end_train)[0]
+    idx_end_train = np.tile(idx_end_train, 50)
+
+    X_start = X_full[idx_start_train]
+    mu_slack, z_slack = encoder.predict(X_start, batch_size=batch_size)
+    train_start = z_slack
+
+    X_end = X_full[idx_end_train]
+    mu_slack, z_slack = encoder.predict(X_end, batch_size=batch_size)
+    train_end = z_slack
 
 
     train_start_med = np.median(train_start, axis=0)
@@ -115,6 +142,37 @@ def get_pert_transform_vec_VAE(X_full, meta_df, curr_samp, encoder, decoder, bat
     X_stim = X_full[idx_stim_train]
     mu_slack, z_slack = encoder.predict(X_stim, batch_size=batch_size)
     train_stim = decoder.predict(mu_slack, batch_size=batch_size)
+
+
+    train_stim_med = np.median(train_stim, axis=0)
+    train_ctrl_med = np.median(train_ctrl, axis=0)
+
+    proj_train = train_stim_med - train_ctrl_med
+
+    return proj_train
+
+def get_pert_transform_vec_VAE_new(X_full, meta_df, curr_samp, encoder, decoder, batch_size):
+
+    # get the perturbation latent code
+    idx_stim_train = np.logical_and(meta_df.samp_type == "bulk", meta_df.isTraining == "Train")
+    idx_stim_train = np.logical_and(idx_stim_train, meta_df.stim == "STIM")
+    idx_stim_train = np.logical_and(idx_stim_train, meta_df.sample_id == curr_samp)
+    idx_stim_train = np.where(idx_stim_train)[0]
+    idx_stim_train = np.tile(idx_stim_train, 50)
+
+    idx_ctrl_train = np.logical_and(meta_df.samp_type == "bulk", meta_df.isTraining == "Train")
+    idx_ctrl_train = np.logical_and(idx_ctrl_train, meta_df.stim == "CTRL")
+    idx_ctrl_train = np.logical_and(idx_ctrl_train, meta_df.sample_id == curr_samp)
+    idx_ctrl_train = np.where(idx_ctrl_train)[0]
+    idx_ctrl_train = np.tile(idx_ctrl_train, 50)
+
+    X_ctrl = X_full[idx_ctrl_train]
+    mu_slack, z_slack = encoder.predict(X_ctrl, batch_size=batch_size)
+    train_ctrl = z_slack
+
+    X_stim = X_full[idx_stim_train]
+    mu_slack, z_slack = encoder.predict(X_stim, batch_size=batch_size)
+    train_stim = z_slack
 
 
     train_stim_med = np.median(train_stim, axis=0)
@@ -186,6 +244,81 @@ def calc_VAE_perturbation(X_full, meta_df, encoder, decoder,
             decoded_0_0 = np.append(decoded_0_0, curr_decoded_0_0, axis=0)
             decoded_0_1 = np.append(decoded_0_1, curr_decoded_0_1, axis=0)
             final_meta_df = final_meta_df.append(curr_meta_df)
+
+    decoded_0_1 = scaler.inverse_transform(decoded_0_1)
+
+    decoded_0_0 = scaler.inverse_transform(decoded_0_0)
+
+
+    return (final_meta_df, decoded_0_0, decoded_0_1)
+
+
+def calc_VAE_perturbation_new(X_full, meta_df, encoder, decoder, 
+                           scaler, batch_size):
+    # get the perturbation latent code
+    idx_sc_ref = np.logical_and(meta_df.stim == "CTRL", meta_df.isTraining == "Train")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.samp_type == "sc_ref")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.cell_prop_type == "cell_type_specific")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.sample_id == "1015")
+    idx_sc_ref = np.where(idx_sc_ref)[0]
+    sc_ref_meta_df = meta_df.iloc[idx_sc_ref]
+
+    X_sc_ref = np.copy(X_full)
+    X_sc_ref = X_sc_ref[idx_sc_ref,]
+
+    ## get the transformation vectors
+    proj_samp_dict = {}
+    proj_pert_dict = {}
+    start_samps = ['1015'] #['1015', '1256']
+    end_samps = ['1488', '1244', '1016', '101', '1039', '107']
+    for start_samp in start_samps:
+        for end_samp in end_samps:
+            proj_vec = get_samp_transform_vec_VAE_new(X_full, meta_df, start_samp, end_samp, encoder, decoder, batch_size)
+            proj_samp_dict[f"{start_samp}_{end_samp}"] = proj_vec
+    for curr_samp in end_samps:
+        proj_vec = get_pert_transform_vec_VAE_new(X_full, meta_df, curr_samp, encoder, decoder, batch_size)
+        proj_pert_dict[curr_samp] = proj_vec
+
+
+    # get the CTRL
+    mu_slack, z_slack = encoder.predict(X_sc_ref, batch_size=batch_size)
+    z_0_0 = np.copy(z_slack)
+    z_0_1 = np.copy(z_slack)
+
+    # do the projections
+    decoded_0_0 = None
+    decoded_0_1 = None
+    final_meta_df = None
+    for curr_samp_end in end_samps:
+        curr_z_0_0 = z_0_0.copy()
+        curr_z_0_1 = z_0_1.copy()
+        curr_meta_df = sc_ref_meta_df.copy()
+        for curr_idx in range(X_sc_ref.shape[0]):
+            # project for each initial sample
+            curr_samp_start = curr_meta_df.iloc[curr_idx].sample_id
+            # project to sample
+            proj_samp_vec = proj_samp_dict[f"{curr_samp_start}_{curr_samp_end}"]
+            # project to perturbation
+            proj_pert_vec = proj_pert_dict[curr_samp_end]
+
+            curr_z_0_0[curr_idx] = curr_z_0_0[curr_idx] + proj_samp_vec
+            curr_z_0_1[curr_idx] = curr_z_0_0[curr_idx] + proj_pert_vec
+            curr_meta_df.iloc[curr_idx].sample_id = curr_samp_end
+            curr_meta_df.iloc[curr_idx].isTraining = "Test"
+
+        ### append new df
+        if final_meta_df is None:
+            decoded_0_0 = curr_z_0_0
+            decoded_0_1 = curr_z_0_1
+            final_meta_df = curr_meta_df
+        else:
+            decoded_0_0 = np.append(decoded_0_0, curr_z_0_0, axis=0)
+            decoded_0_1 = np.append(decoded_0_1, curr_z_0_1, axis=0)
+            final_meta_df = pd.concat([final_meta_df, curr_meta_df])
+
+
+    decoded_0_0 = decoder.predict(decoded_0_0, batch_size=batch_size)
+    decoded_0_1 = decoder.predict(decoded_0_1, batch_size=batch_size)
 
     decoded_0_1 = scaler.inverse_transform(decoded_0_1)
 
@@ -375,7 +508,9 @@ def calc_CVAE_perturbation(X_full, meta_df, encoder, decoder,
     return (ctrl_test_meta_df, decoded_0_0, decoded_0_1)
 
 
-def subset_sample_celltype_perturbation(X_full, decoded_0_0, decoded_0_1, scaler, samp_interest, cell_prop_type, meta_df, ctrl_test_meta_df, cell_type_interest=None):
+def subset_sample_celltype_perturbation(X_full, decoded_0_0, decoded_0_1, scaler, 
+                                        samp_interest, cell_prop_type, meta_df, 
+                                        ctrl_test_meta_df, cell_type_interest=None):
 
     # get the real data
     X_tmp = np.copy(X_full)
@@ -448,8 +583,10 @@ def calc_expr_log2FC_r2(real_ctrl, real_stim, proj_ctrl, proj_stim):
     log2FC_r2_top = spearmanr(real_log2FC[top_30], proj_log2FC[top_30])[0]
 
     log2FC_rmse = np.sqrt(np.mean((proj_log2FC-real_log2FC)**2))
+    expr_stim_rmse = np.sqrt(np.mean((proj_stim-real_stim)**2))
+    expr_ctrl_rmse = np.sqrt(np.mean((proj_ctrl-real_ctrl)**2))
 
-    return (expr_r2_stim, expr_r2_ctrl, log2FC_r2, log2FC_r2_bottom, log2FC_r2_mid, log2FC_r2_top, log2FC_rmse)
+    return (expr_r2_stim, expr_r2_ctrl, log2FC_r2, log2FC_r2_bottom, log2FC_r2_mid, log2FC_r2_top, log2FC_rmse, expr_stim_rmse, expr_ctrl_rmse)
 
 
 def get_TP_FP_DE_genes(projected_Zstimulated, projected_ctrl, DE_table, gene_cutoff=100, pvalue_cutoff=0.01):
@@ -685,5 +822,56 @@ def plot_PR_ROC_liver(ctrl_test_meta_df, decoded_0_0, decoded_0_1,
     res_df["cell_type"] = [curr_cell_type]*8
     res_df["ref_set"] = ["sn"]*4+["sc_sn"]*4
     res_df["method"] = [method_name, "random", "zero", "bulk"]*2
+
+    return axs, proj_log2FC_df, res_df
+
+
+def plot_PR_ROC_kang(ctrl_test_meta_df, decoded_0_0, decoded_0_1, curr_cell_type, sc_DE_ref, axs, union_genes_cap):
+
+    # this is for the "projected" expression
+    curr_idx = np.where(ctrl_test_meta_df.Y_max == curr_cell_type)[0]
+    proj_ctrl = decoded_0_0[curr_idx]
+    proj_stim = decoded_0_1[curr_idx]
+
+    # take the median for nomalization
+    proj_ctrl = np.median(rankdata(proj_ctrl, axis=1), axis=0)
+    proj_stim = np.median(rankdata(proj_stim, axis=1), axis=0)
+    proj_log2FC = abs(proj_stim-proj_ctrl)
+
+    # make dataframe of true/false positives
+    proj_log2FC_df = pd.DataFrame(proj_log2FC, index=union_genes_cap)
+    proj_log2FC_df["orig"] = proj_stim-proj_ctrl
+
+    # make a random one
+    proj_log2FC_df["random"] = sample(proj_log2FC_df[0].tolist(), len(proj_log2FC_df[0].tolist()))
+
+    proj_log2FC_df["sc_DE"] = 0
+    proj_log2FC_df.iloc[np.where(np.isin(union_genes_cap, sc_DE_ref))[0], proj_log2FC_df.columns.get_loc("sc_DE")] = 1
+
+
+
+    # now do the single-cell cell type specific DE
+    roc_display = RocCurveDisplay.from_predictions(proj_log2FC_df.sc_DE, proj_log2FC_df[0], name="BuDDI", ax=axs[0])
+    pr_display = PrecisionRecallDisplay.from_predictions(proj_log2FC_df.sc_DE, proj_log2FC_df[0], name="BuDDI", ax=axs[1])
+
+    roc_display = RocCurveDisplay.from_predictions(proj_log2FC_df.sc_DE, proj_log2FC_df.random, name="random",ax= axs[0])
+    pr_display = PrecisionRecallDisplay.from_predictions(proj_log2FC_df.sc_DE, proj_log2FC_df.random, name="random", ax=axs[1])
+
+
+    axs[0].legend(loc="best")
+    axs[1].legend(loc="best")
+    axs[0].set_title(curr_cell_type)
+    axs[1].set_title(curr_cell_type)
+
+
+    sc_avg_pr_BuDDI = average_precision_score(proj_log2FC_df.sc_DE, proj_log2FC_df[0])
+    sc_avg_pr_random = average_precision_score(proj_log2FC_df.sc_DE, proj_log2FC_df.random)
+
+    res_df = pd.DataFrame([sc_avg_pr_BuDDI, sc_avg_pr_random])
+    res_df.columns = ["scores"]
+    res_df["metric"] = ["avg_pr"]*2
+    res_df["cell_type"] = [curr_cell_type]*2
+    res_df["ref_set"] = ["sc"]*2
+    res_df["method"] = ["BuDDI", "random"]
 
     return axs, proj_log2FC_df, res_df

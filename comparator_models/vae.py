@@ -156,6 +156,75 @@ def plot_reconstruction_vae(encoder, decoder,
 
     return fig
 
+def calc_VAE_perturbation_kang(X_full, Y_full, meta_df, encoder, decoder, 
+                           scaler, batch_size, genes_ordered, top_lim=100):
+    
+    # get the cell type specific single cell reference
+    idx_sc_ref = np.logical_and(meta_df.stim == "CTRL", meta_df.isTraining == "Train")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.samp_type == "sc_ref")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.cell_prop_type == "cell_type_specific")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.sample_id == "1015")
+    idx_sc_ref = np.where(idx_sc_ref)[0]
+
+
+    sc_ref_meta_df = meta_df.iloc[idx_sc_ref]
+    print(sc_ref_meta_df.cell_prop_type.value_counts())
+
+
+    X_sc_ref = np.copy(X_full)
+    X_sc_ref = X_sc_ref[idx_sc_ref,]
+
+    ## get the transformation vector
+    proj_vec = get_pert_transform_vec_VAE(X_full, meta_df, encoder, decoder, batch_size)
+
+
+
+    # get the CTRL encodings
+    mu_slack, z_slack = encoder.predict(X_sc_ref, batch_size=batch_size)
+
+    # add the latent proj
+    encoded_0_1 = z_slack + proj_vec
+
+    # decode
+    decoded_0_1 = decoder.predict(encoded_0_1, batch_size=batch_size)
+    decoded_0_0 = decoder.predict(z_slack, batch_size=batch_size)
+
+    decoded_0_1 = scaler.inverse_transform(decoded_0_1)
+    decoded_0_0 = scaler.inverse_transform(decoded_0_0)
+
+    final_meta_df = sc_ref_meta_df
+    final_meta_df["isTraining"] = "Test"
+
+
+    top_genes = {}
+    de_genes_all = None
+    for curr_cell_type in Y_full.columns:
+
+
+        # this is for the "projected" expression
+        curr_idx = np.where(final_meta_df.Y_max == curr_cell_type)[0]
+        proj_ctrl = decoded_0_0[curr_idx]
+        proj_stim = decoded_0_1[curr_idx]
+
+        # take the median for nomalization
+
+        proj_ctrl = np.median(rankdata(proj_ctrl, axis=1), axis=0)
+        proj_stim = np.median(rankdata(proj_stim, axis=1), axis=0)
+        proj_log2FC = np.abs(proj_stim-proj_ctrl)
+
+        # make into DF
+        proj_log2FC_df = pd.DataFrame(proj_log2FC, index=genes_ordered)
+
+        intersect_proj = proj_log2FC_df.loc[genes_ordered][0]
+        top_proj_genes = intersect_proj.index[np.argsort(np.abs(intersect_proj))].tolist()[::-1][0:top_lim]
+
+        top_genes[curr_cell_type] = top_proj_genes
+
+
+    return (final_meta_df, decoded_0_0, decoded_0_1, top_genes)
+
+
+
 def get_pert_transform_vec_VAE(X_full, meta_df, encoder, decoder, batch_size):
 
     # get the stimulated bulks
@@ -194,9 +263,9 @@ def calc_VAE_perturbation(X_full, Y_full, meta_df, encoder, decoder,
     idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.cell_prop_type == "cell_type_specific")
     idx_sc_ref = np.where(idx_sc_ref)[0]
 
-    idx_sc_ref = np.random.choice(len(idx_sc_ref), 500, replace=True)
 
     sc_ref_meta_df = meta_df.iloc[idx_sc_ref]
+    print(sc_ref_meta_df.cell_prop_type.value_counts())
 
 
     X_sc_ref = np.copy(X_full)
