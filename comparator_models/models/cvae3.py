@@ -44,7 +44,6 @@ disable_eager_execution()
 def instantiate_model(
         n_x = 7000,
         n_drug = 2,
-        n_label = 2,
         n_tech = 2,
         n_z = 266, # same as BuDDI4 64+64+64+64+10
         encoder_dim1 = 784,
@@ -70,10 +69,9 @@ def instantiate_model(
     # declare the Keras tensor we will use as input to the encoder
     X = Input(shape=(n_x,))
     Drug = Input(shape=(n_drug,))
-    Label = Input(shape=(n_label,))
     Bulk = Input(shape=(n_tech,))
 
-    inputs = concat([X, Label, Bulk, Drug])
+    inputs = concat([X, Bulk, Drug])
 
     # set up encoder network
     # this is an encoder with 512 hidden layer
@@ -104,7 +102,7 @@ def instantiate_model(
     # Sampling latent space
     z_slack = Lambda(sample_z, output_shape = (n_z, ), name="z_samp_slack")([mu_slack, l_sigma_slack, n_z])
 
-    z_concat = concat([z_slack, Label, Bulk, Drug])
+    z_concat = concat([z_slack, Bulk, Drug])
 
 
     ####################
@@ -128,7 +126,7 @@ def instantiate_model(
     outputs = decoder_out(dh_p2)
 
 
-    d_in = Input(shape=(n_z+n_label+n_tech+n_drug,))
+    d_in = Input(shape=(n_z+n_tech+n_drug,))
     d_h1 = decoder_hidden1(d_in)
     d_h2 = decoder_hidden2(d_h1)
     d_out = decoder_out(d_h2)
@@ -146,8 +144,8 @@ def instantiate_model(
 
 
     ##### link it all together
-    cvae = Model([X, Label, Bulk, Drug], outputs)
-    encoder = Model([X, Label, Bulk, Drug], [mu_slack, z_slack])
+    cvae = Model([X, Bulk, Drug], outputs)
+    encoder = Model([X, Bulk, Drug], z_slack)
 
 
     decoder = Model(d_in, d_out)

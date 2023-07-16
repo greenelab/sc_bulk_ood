@@ -4,7 +4,7 @@ sys.path.insert(1, '../../')
 sys.path.insert(1, '../')
 from buddi.preprocessing import sc_preprocess
 from buddi.plotting import validation_plotting as vp
-from comparator_models.models import cvae4
+from comparator_models.models import cvae4, cvae3
 
 # general imports
 import warnings
@@ -52,7 +52,7 @@ class CVAETrainParameters:
     decoder_dim2: int = 512
     batch_size: int = 500
     n_epoch: int = 100
-    beta_kl: float = 0.01
+    beta_kl: float = 1
     activ: str = 'relu'
     adam_learning_rate: float = 0.0005
 
@@ -130,17 +130,17 @@ def plot_reconstruction_cvae(encoder, decoder,
     # now use the encoder to get the latent spaces
     if use_cvae4:
         # now use the encoder to get the latent spaces
-        z_slack = encoder.predict([X_temp, label_temp, bulk_temp, perturb_temp], batch_size=batch_size)
+        mu_slack, z_slack = encoder.predict([X_temp, label_temp, bulk_temp, perturb_temp], batch_size=batch_size)
 
         # now concatenate together
         z_concat = np.hstack([z_slack, label_temp, bulk_temp, perturb_temp])
 
     else:
         # now use the encoder to get the latent spaces
-        z_slack = encoder.predict([X_temp, label_temp, perturb_temp], batch_size=batch_size)
+        mu_slack, z_slack = encoder.predict([X_temp, bulk_temp, perturb_temp], batch_size=batch_size)
 
         # now concatenate together
-        z_concat = np.hstack([z_slack, label_temp, perturb_temp])
+        z_concat = np.hstack([z_slack, bulk_temp, perturb_temp])
 
 
 
@@ -169,10 +169,14 @@ def plot_reconstruction_cvae(encoder, decoder,
 
     return fig
 
-def calc_CVAE_perturbation(X_full, Y_full, meta_df, encoder, decoder, 
-                           scaler, batch_size, 
-                           label_1hot_full, bulk_1hot_full, drug_1hot_full,
-                           genes_ordered, top_lim=100):
+def calc_CVAE_perturbation(X_full, Y_full, meta_df, res1_enc, res1_dec, 
+                            scaler, batch_size, 
+                            label_1hot_full, 
+                            bulk_1hot_full, 
+                            drug_1hot_full,
+                            genes_ordered, top_lim=100):
+
+    from scipy.stats import rankdata
 
     label_1hot_temp = np.copy(label_1hot_full)
     bulk_1hot_temp = np.copy(bulk_1hot_full)
@@ -180,18 +184,15 @@ def calc_CVAE_perturbation(X_full, Y_full, meta_df, encoder, decoder,
 
 
     # get the single cell data 
-    idx_sc_ref = np.logical_and(meta_df.isTraining == "Train", meta_df.stim == "STIM")
-    idx_sc_ref = np.where(meta_df.isTraining == "Train")[0]
+    idx_sc_ref = np.logical_and(meta_df.stim == "CTRL", meta_df.isTraining == "Train")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.samp_type == "sc_ref")
+    idx_sc_ref = np.logical_and(idx_sc_ref, meta_df.cell_prop_type == "cell_type_specific")
+    idx_sc_ref = np.where(idx_sc_ref)[0]
+
 
     ## this is to match up sample amounts across comparators
     idx_sc_ref = np.random.choice(idx_sc_ref, 2000, replace=True) 
 
-
-    X_sc_ref = np.copy(X_full)
-    X_sc_ref = X_sc_ref[idx_sc_ref,]
-
-    # get the sample_ids we will perturb
-    sample_code = label_1hot_temp[idx_sc_ref]
 
     # make the metadata file
     ctrl_test_meta_df = meta_df.copy()
@@ -199,7 +200,21 @@ def calc_CVAE_perturbation(X_full, Y_full, meta_df, encoder, decoder,
     ctrl_test_meta_df.isTraining = "Test"
     ctrl_test_meta_df.stim = "CTRL"
 
+
+    X_sc_ref = np.copy(X_full)
+    X_sc_ref = X_sc_ref[idx_sc_ref,]
+
+    # get the sample_ids we will perturb
+    idx_sc_ref = np.where(np.logical_and(meta_df.stim == "CTRL", meta_df.samp_type == "bulk"))[0]
+    idx_sc_ref = np.random.choice(idx_sc_ref, 2000, replace=True) 
+    sample_code_unpert = label_1hot_temp[idx_sc_ref]
+
+    idx_sc_ref = np.where(np.logical_and(meta_df.stim == "STIM", meta_df.samp_type == "bulk"))[0]
+    idx_sc_ref = np.random.choice(idx_sc_ref, 2000, replace=True) 
+    sample_code_pert = label_1hot_temp[idx_sc_ref]
+
     # get the bulk code
+    idx_bulk = np.where(meta_df.samp_type == "bulk")[0]
     bulk_code = bulk_1hot_temp[idx_sc_ref]
 
 
@@ -219,15 +234,15 @@ def calc_CVAE_perturbation(X_full, Y_full, meta_df, encoder, decoder,
     # now put it all together
     ######
 
-    z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, perturbed_code], batch_size=batch_size)
-    z_concat = np.hstack([z_slack, sample_code, bulk_code, perturbed_code])
-    decoded_0_1 = decoder.predict(z_concat, batch_size=batch_size)
+    mu_slack, z_slack = res1_enc.predict([X_sc_ref, sample_code_pert, bulk_code, perturbed_code], batch_size=batch_size)
+    z_concat = np.hstack([z_slack, sample_code_pert, bulk_code, perturbed_code])
+    decoded_0_1 = res1_dec.predict(z_concat, batch_size=batch_size)
     decoded_0_1 = scaler.inverse_transform(decoded_0_1)
 
 
-    z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, unperturbed_code], batch_size=batch_size)
-    z_concat = np.hstack([z_slack, sample_code, bulk_code, unperturbed_code])
-    decoded_0_0 = decoder.predict(z_concat, batch_size=batch_size)
+    mu_slack, z_slack = res1_enc.predict([X_sc_ref, sample_code_unpert, bulk_code, unperturbed_code], batch_size=batch_size)
+    z_concat = np.hstack([z_slack, sample_code_unpert, bulk_code, unperturbed_code])
+    decoded_0_0 = res1_dec.predict(z_concat, batch_size=batch_size)
     decoded_0_0 = scaler.inverse_transform(decoded_0_0)
 
     ######
@@ -248,20 +263,17 @@ def calc_CVAE_perturbation(X_full, Y_full, meta_df, encoder, decoder,
 
         proj_ctrl = np.median(rankdata(proj_ctrl, axis=1), axis=0)
         proj_stim = np.median(rankdata(proj_stim, axis=1), axis=0)
-        #proj_ctrl = np.median(proj_ctrl, axis=0)
-        #proj_stim = np.median(proj_stim, axis=0)
         proj_log2FC = np.abs(proj_stim-proj_ctrl)
 
         # make into DF
         proj_log2FC_df = pd.DataFrame(proj_log2FC, index=genes_ordered)
 
         intersect_proj = proj_log2FC_df.loc[genes_ordered][0]
-        #top_proj_genes = intersect_proj.index[np.argsort(np.abs(intersect_proj))].tolist()[::-1][0:top_lim]
-        top_proj_genes = intersect_proj.index[np.argsort(np.abs(intersect_proj))].tolist()[0:top_lim]
+        top_proj_genes = intersect_proj.index[np.argsort(np.abs(intersect_proj))].tolist()[::-1][0:top_lim]
 
         top_genes[curr_cell_type] = top_proj_genes
-
     return (ctrl_test_meta_df, decoded_0_0, decoded_0_1, top_genes)
+
 
 
 def calc_CVAE_perturbation_sample_specific(X_full, Y_full,
@@ -330,13 +342,13 @@ def calc_CVAE_perturbation_sample_specific(X_full, Y_full,
     # now put it all together
     ######
 
-    z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, perturbed_code], batch_size=batch_size)
+    mu_slack, z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, perturbed_code], batch_size=batch_size)
     z_concat = np.hstack([z_slack, sample_code, bulk_code, perturbed_code])
     decoded_0_1 = decoder.predict(z_concat, batch_size=batch_size)
     decoded_0_1 = scaler.inverse_transform(decoded_0_1)
 
 
-    z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, unperturbed_code], batch_size=batch_size)
+    mu_slack, z_slack = encoder.predict([X_sc_ref, sample_code, bulk_code, unperturbed_code], batch_size=batch_size)
     z_concat = np.hstack([z_slack, sample_code, bulk_code, unperturbed_code])
     decoded_0_0 = decoder.predict(z_concat, batch_size=batch_size)
     decoded_0_0 = scaler.inverse_transform(decoded_0_0)
@@ -410,6 +422,21 @@ def train_cvae(res_data_path, exp_id, use_cvae4,
             activ = params.activ, 
             optim = tf.keras.optimizers.legacy.Adam(learning_rate=params.adam_learning_rate)
         )
+    else:
+        cvae, encoder, decoder = cvae3.instantiate_model(
+            n_x=n_x,
+            n_drug=n_drugs,
+            n_tech=n_tech,
+            encoder_dim1 = params.encoder_dim1, 
+            encoder_dim2 = params.encoder_dim2, 
+            decoder_dim1 = params.decoder_dim1, 
+            decoder_dim2 = params.decoder_dim2, 
+            batch_size = params.batch_size, 
+            n_epoch = params.n_epoch,  
+            beta_kl = params.beta_kl, 
+            activ = params.activ, 
+            optim = tf.keras.optimizers.legacy.Adam(learning_rate=params.adam_learning_rate)
+        )
 
 
     # make test train split
@@ -431,17 +458,27 @@ def train_cvae(res_data_path, exp_id, use_cvae4,
     idx_train = np.random.choice(idx_train, train_size_samp*5, replace=True)
     idx_test = np.random.choice(idx_test, test_size_samp*5, replace=True)
 
-    cvae_hist = cvae.fit([X_cvae[idx_train], 
-                      label_cvae[idx_train], 
-                      bulk_cvae[idx_train], 
-                      drug_cvae[idx_train]], 
-                      X_cvae[idx_train], verbose = 0, batch_size=params.batch_size, epochs=params.n_epoch,
-                      validation_data=([X_cvae[idx_test], 
-                                        label_cvae[idx_test], 
+    if use_cvae4:
+        cvae_hist = cvae.fit([X_cvae[idx_train], 
+                        label_cvae[idx_train], 
+                        bulk_cvae[idx_train], 
+                        drug_cvae[idx_train]], 
+                        X_cvae[idx_train], verbose = 0, batch_size=params.batch_size, epochs=params.n_epoch,
+                        validation_data=([X_cvae[idx_test], 
+                                            label_cvae[idx_test], 
+                                            bulk_cvae[idx_test], 
+                                            drug_cvae[idx_test]], 
+                                            X_cvae[idx_test]))
+    else:
+        cvae_hist = cvae.fit([X_cvae[idx_train], 
+                    bulk_cvae[idx_train], 
+                    drug_cvae[idx_train]], 
+                    X_cvae[idx_train], verbose = 0, batch_size=params.batch_size, epochs=params.n_epoch,
+                    validation_data=([X_cvae[idx_test], 
                                         bulk_cvae[idx_test], 
                                         drug_cvae[idx_test]], 
                                         X_cvae[idx_test]))
-                                        
+                                               
                                         
     loss_df = make_loss_df(cvae_hist)
 

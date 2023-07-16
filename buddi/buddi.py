@@ -657,6 +657,7 @@ def calc_buddi_perturbation(meta_df, X_full, Y_full, scaler,
     # get the points we are interested in
     # we will use their codes and only change the perturbation codes
     subset_idx = np.logical_and(meta_df.isTraining == "Train", meta_df.cell_prop_type == "cell_type_specific")
+    subset_idx = np.logical_and(subset_idx, meta_df.stim == "CTRL")
     subset_idx = np.where(subset_idx)[0] 
     subset_idx = np.random.choice(subset_idx, 8000, replace=True)
 
