@@ -44,39 +44,34 @@ disable_eager_execution()
 def fit_model(known_prop_vae, unknown_prop_vae, X_unknown_prop,
               label_unknown_prop, X_known_prop, Y_known_prop, 
               label_known_prop, epochs, batch_size):
-    assert len(X_known_prop) % len(X_unknown_prop) == 0, \
-            (len(X_unknown_prop), batch_size, len(X_known_prop))
+    assert len(X_unknown_prop) % len(X_known_prop) == 0, \
+      (len(X_unknown_prop), batch_size, len(X_known_prop))          
     start = time.time()
     history = []
     
     for epoch in range(epochs):
-        labeled_index = np.arange(len(X_known_prop))
-        np.random.shuffle(labeled_index)
+        unlabeled_index = np.arange(len(X_unknown_prop))
+        np.random.shuffle(unlabeled_index)
 
         # Repeat the unlabeled data to match length of labeled data
-        unlabeled_index = []
-        for i in range(len(X_known_prop) // len(X_unknown_prop)):
-            l = np.arange(len(X_unknown_prop))
+        labeled_index = []
+        for i in range(len(X_unknown_prop) // len(X_known_prop)):
+            l = np.arange(len(X_known_prop))
             np.random.shuffle(l)
-            unlabeled_index.append(l)
-        unlabeled_index = np.concatenate(unlabeled_index)
+            labeled_index.append(l)
+        labeled_index = np.concatenate(labeled_index)
         
         batches = len(X_unknown_prop) // batch_size
         for i in range(batches):
-            # Labeled
+             # Labeled
             index_range =  labeled_index[i * batch_size:(i+1) * batch_size]
-            loss = known_prop_vae.train_on_batch(X_known_prop[index_range], 
+            loss = known_prop_vae.train_on_batch([X_known_prop[index_range], Y_known_prop[index_range]],
                                                     [X_known_prop[index_range], Y_known_prop[index_range], label_known_prop[index_range]])
-            
+        
+
             # Unlabeled
-            #y_shuffle = np.identity(8, dtype=np.float32)
-            #for idx in range(0, 49):
-            #    y_shuffle = np.vstack((y_shuffle, np.identity(8, dtype=np.float32)))
-            #np.random.shuffle(y_shuffle)
-            #y_shuffle = np.zeros((batch_size, 8))
-            #y_shuffle[:,0] = 1
             index_range =  unlabeled_index[i * batch_size:(i+1) * batch_size]
-            loss += [unknown_prop_vae.train_on_batch(X_unknown_prop[index_range], 
+            loss += [unknown_prop_vae.train_on_batch(X_unknown_prop[index_range],
                                                         [X_unknown_prop[index_range], label_unknown_prop[index_range]])]
                                                         #[X_unknown_prop[index_range], Y_unknown_prop[index_range], label_unknown_prop[index_range], drug_unknown_prop[index_range]])]
             
@@ -263,11 +258,8 @@ def instantiate_model(n_x,
     unknown_prop_vae = Model(X, [outputs, rotation_outputs])
 
     known_prop_vae.compile(optimizer=optim, loss=[vae_loss, prop_loss, class_loss, None])
-
     #unknown_prop_vae.compile(optimizer=optim, loss=[vae_loss, prop_loss_unknown, class_loss, drug_loss])
-    unknown_prop_vae.compile(optimizer=optim, loss=[vae_loss_unk, class_loss])
-
-
+    unknown_prop_vae.compile(optimizer=optim, loss=[vae_loss_unk, class_loss]) 
 
     encoder = Model(X, [z_slack, mu_slack, l_sigma_slack, mu_prop, l_sigma_prop, prop_outputs, z_rot, mu_rot, l_sigma_rot])
 
