@@ -6,4 +6,7 @@
 libs
 *pyc
 *.lsf
-.ipynb_checkpoints/*
+/**/cache/*
+delete_me/*
+.git.bfg-report/*
+/**/.ipynb_checkpoints/*
