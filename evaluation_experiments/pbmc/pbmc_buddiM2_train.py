@@ -95,9 +95,12 @@ if __name__ == "__main__":
     drug_full = to_categorical(Drug_full)
 
     # indexes for the training
-    idx_train = np.where(np.logical_and(Label_full > -1, Label_full < 2))[0]
-    idx_unlab = np.where(Label_full >= 2)[0]
+    # 1-2 is labeled 
+    # 0,3-9 is unlabeled
+    idx_train = np.where(np.logical_and(Label_full > 0, Label_full < 3))[0] #np.where(np.logical_and(Label_full > -1, Label_full < 2))[0]
+    idx_unlab = np.where(np.logical_or(Label_full == 0, Label_full > 2))[0] #np.where(Label_full >= 2)[0]
     idx_drug = np.where(Drug_full > 0)[0]
+    idx_5 = np.where(Label_full == 5)[0]
     idx_0 = np.where(Label_full==0)[0]
 
     ##################################################
