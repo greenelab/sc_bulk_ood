@@ -447,7 +447,7 @@ def subset_sample_celltype_perturbation(X_full, decoded_0_0, decoded_0_1, scaler
     # get the reconstructed 
     recon_Zstim_idx = np.logical_and(ctrl_test_meta_df.stim == "CTRL", ctrl_test_meta_df.isTraining == "Test")
     recon_Zstim_idx = np.logical_and(recon_Zstim_idx, ctrl_test_meta_df.cell_prop_type == cell_prop_type)
-    recon_Zstim_idx = np.logical_and(recon_Zstim_idx, ctrl_test_meta_df.sample_id == samp_interest)
+    #recon_Zstim_idx = np.logical_and(recon_Zstim_idx, ctrl_test_meta_df.sample_id == samp_interest)
     if cell_type_interest is not None:
         recon_Zstim_idx = np.logical_and(recon_Zstim_idx, ctrl_test_meta_df.Y_max == cell_type_interest)
     recon_Zstim_idx = np.where(recon_Zstim_idx)[0]
@@ -462,8 +462,11 @@ def calc_expr_log2FC_r2(real_ctrl, real_stim, proj_ctrl, proj_stim):
 
     real_stim_med = np.median(real_stim, axis=0)
     proj_stim_med = np.median(proj_stim, axis=0)
+    expr_r2_stim = spearmanr(real_stim_med, proj_stim_med)[0]
 
-    expr_r2 = pearsonr(real_stim_med, proj_stim_med)[0]
+    real_ctrl_med = np.median(real_ctrl, axis=0)
+    proj_ctrl_med = np.median(proj_ctrl, axis=0)
+    expr_r2_ctrl = spearmanr(real_ctrl_med, proj_ctrl_med)[0]
 
 
     real_ctrl = np.median(real_ctrl, axis=0)+1
@@ -475,21 +478,21 @@ def calc_expr_log2FC_r2(real_ctrl, real_stim, proj_ctrl, proj_stim):
     proj_log2FC = np.log2(proj_stim/proj_ctrl)
 
 
-    log2FC_r2 = pearsonr(real_log2FC, proj_log2FC)[0]
+    log2FC_r2 = spearmanr(real_log2FC, proj_log2FC)[0]
 
     # do the same for bottom 30, mid and top
-    proj_ctrl_quantiles = np.quantile(proj_ctrl, [0.33, 0.66])
-    bottom_30 = np.where(proj_ctrl < proj_ctrl_quantiles[0])
-    mid_30 = np.where(np.logical_and(proj_ctrl > proj_ctrl_quantiles[0], proj_ctrl < proj_ctrl_quantiles[1]))
-    top_30 = np.where(proj_ctrl > proj_ctrl_quantiles[1])
+    real_ctrl_quantiles = np.quantile(real_ctrl, [0.33, 0.66])
+    bottom_30 = np.where(real_ctrl < real_ctrl_quantiles[0])
+    mid_30 = np.where(np.logical_and(real_ctrl > real_ctrl_quantiles[0], real_ctrl < real_ctrl_quantiles[1]))
+    top_30 = np.where(real_ctrl > real_ctrl_quantiles[1])
 
-    log2FC_r2_bottom = pearsonr(real_log2FC[bottom_30], proj_log2FC[bottom_30])[0]
-    log2FC_r2_mid = pearsonr(real_log2FC[mid_30], proj_log2FC[mid_30])[0]
-    log2FC_r2_top = pearsonr(real_log2FC[top_30], proj_log2FC[top_30])[0]
+    log2FC_r2_bottom = spearmanr(real_log2FC[bottom_30], proj_log2FC[bottom_30])[0]
+    log2FC_r2_mid = spearmanr(real_log2FC[mid_30], proj_log2FC[mid_30])[0]
+    log2FC_r2_top = spearmanr(real_log2FC[top_30], proj_log2FC[top_30])[0]
 
     log2FC_rmse = np.sqrt(np.mean((proj_log2FC-real_log2FC)**2))
 
-    return (expr_r2, log2FC_r2, log2FC_r2_bottom, log2FC_r2_mid, log2FC_r2_top, log2FC_rmse)
+    return (expr_r2_stim, expr_r2_ctrl, log2FC_r2, log2FC_r2_bottom, log2FC_r2_mid, log2FC_r2_top, log2FC_rmse)
 
 
 def get_TP_FP_DE_genes(projected_Zstimulated, projected_ctrl, DE_table, gene_cutoff=100, pvalue_cutoff=0.01):
@@ -533,6 +536,8 @@ def plot_pca(plot_df, color_vec, ax, title="", alpha=0.1):
     )
 
     ax.set_title(title)
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+
     return g
 
 def get_tsne_for_plotting(encodings):
@@ -559,6 +564,8 @@ def plot_tsne(plot_df, color_vec, ax, title=""):
     )
 
     ax.set_title(title)
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+
     return g
 
 import umap
@@ -587,6 +594,8 @@ def plot_umap(plot_df, color_vec, ax, title="", alpha=0.3):
     )
 
     ax.set_title(title)
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+
     return g
 
 def plot_expr_corr(xval, yval, ax, title, xlab, ylab, class_id, max_val=2700, min_val=0, alpha=0.5):

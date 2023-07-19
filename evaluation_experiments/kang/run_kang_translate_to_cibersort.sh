@@ -21,3 +21,10 @@ exp_id="kang"
 lsf_file=${cibersort_path}/${exp_id}_1_translate_to_cibersort.lsf
 bsub -R "rusage[mem=15GB]" -W 24:00 -n 1 -q "normal" -o ${lsf_file} -J ${exp_id} ${py_script} ${exp_id}
 
+samp_idx=(0 2 3 5 6 7 8 9 10 11 12 13 14 15)
+for i in "${samp_idx[@]}"; do
+    py_script="python kang_translate_to_cibersort.py -cs ${cibersort_path} -aug ${aug_data_path} -pidx ${i} --no_use_test  -exp "
+    exp_id="kang"
+    lsf_file=${cibersort_path}/${exp_id}_1_translate_to_cibersort.lsf
+    bsub -R "rusage[mem=15GB]" -W 24:00 -n 1 -q "normal" -o ${lsf_file} -J ${exp_id} ${py_script} ${exp_id}
+done

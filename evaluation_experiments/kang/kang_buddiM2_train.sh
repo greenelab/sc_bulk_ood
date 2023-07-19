@@ -7,7 +7,7 @@ res_path="${work_dir}/../../results/single_cell_data/buddiM2_kang/"
 aug_data_path="${work_dir}/../../data/single_cell_data/augmented_kang_data/"
 cibersort_file_path="${work_dir}/../../results/single_cell_data/cibersort_kang/CIBERSORTx_Job17_kang_1_cybersort_sig_inferred_phenoclasses.CIBERSORTx_Job17_kang_1_cybersort_sig_inferred_refsample.bm.K999.txt"
 
-num_genes=5000
+num_genes=7000
 
 py_script="python kang_buddiM2_train.py -res ${res_path} -aug ${aug_data_path} -n ${num_genes} -cib_genes ${cibersort_file_path}"
 

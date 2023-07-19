@@ -1,0 +1,9 @@
+rule:
+    input:
+        ...
+    output:
+        ...
+    resources:
+        runtime_min=240
+    shell:
+        ...
