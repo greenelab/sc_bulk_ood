@@ -368,4 +368,3 @@ def instantiate_model(n_x,
 
 
     return (known_prop_vae, unknown_prop_vae, encoder_unlab, encoder_lab, decoder, classifier)
-    #return (known_prop_vae, encoder, decoder)
