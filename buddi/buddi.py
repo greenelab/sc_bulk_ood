@@ -1,4 +1,12 @@
-# import the VAE code
+"""
+This is the interface to initializing, training, plotting 
+and estimating perturbation responses for BuDDI.
+BuDDI calls the scripts buddi3 or buddi4, which contain the training
+and models creating code. buddi3 or buddi4 only differ by the number of 
+dimensions (other than the slack latent space) BuDDI would like to have, 3 or 4.
+
+"""
+
 import sys
 sys.path.insert(1, '../../')
 sys.path.insert(1, '../')
@@ -43,7 +51,23 @@ class BuddiTrainParameters:
 
     n_label_z: dimension of latent code for each non-y latent space
 
-    TODO: fix format, populate with all parameters
+    encoder_dim: dim of encoder hidden layer
+    decoder_dim: dim of decoder hidden layer
+    class_dim1: for auxillary classifier first hidden dim
+    class_dim2: for auxillary classifier first hidden dim
+    batch_size: batch size (500)
+    n_epoch: number of epochs
+    alpha_rot: weight for sample classifier in loss
+    alpha_prop: weight for cell type proportion classifier in loss
+    alpha_bulk: weight for bulk vs sc classifier in loss
+    alpha_drug: weight for perturbation classifier in loss
+    beta_kl_slack: weight for KL term on slack
+    beta_kl_rot: weight for KL term on sample latent space
+    beta_kl_drug: weight for KL term on drug latent space
+    beta_kl_bulk: weight for KL term on bulk vs sc latent space
+    activ: activation function used in most nodes
+    adam_learning_rate: ADAM learning rate
+
     """
     n_label_z: int = 64
     encoder_dim: int = 512
@@ -65,6 +89,20 @@ class BuddiTrainParameters:
 
 @dataclass
 class BuddiTrainResults:
+    """
+    Parameters for constructing a Buddi model results.
+
+    known_prop_vae: supervised VAE
+    unknown_prop_vae: unsupervised VAE
+    encoder_unlab: unsupervised encoder, all latent dimensions
+    encoder_lab: supervised encoder, all latent dimensions
+    decoder: decoder result
+    classifier: cell type proportion estimator
+    loss_fig: figure of training and a training-validation set
+    spr_fig: figure of the spearman correlation between the true and estimated cell-type proportion 
+    output_folder: Path to where all results will be written
+
+    """
     known_prop_vae: Any
     unknown_prop_vae: Any
     encoder_unlab: Any
@@ -147,7 +185,13 @@ def _make_loss_df(loss_history, use_buddi4):
     return(loss_df)
 
 def make_loss_df(full_loss_history, use_buddi4):
+    """
+    Create a pandas dataframe from the loss history returned by training BuDDI
 
+    full_loss_history: returned history from BuDDI
+    use_buddi4: True if BuDDI was trained using 4 latent spaces, otherwise false (3 latent spaces)
+
+    """
     cv_loss_history = full_loss_history[0]
     meta_history = full_loss_history[1]
     val_loss_history = full_loss_history[2]
@@ -186,6 +230,15 @@ def _make_loss_fig(loss_df, ax, title, loss_to_plot):
     return g
 
 def make_loss_fig(cv_loss_df, val_loss_df, use_buddi4=True):
+
+    """
+    Plot the loss history returned by training BuDDI after converting to a pandas dataframe using make_loss_df
+
+    cv_loss_df: cross validation returned history from BuDDI
+    val_loss_df: held-out training validation set loss
+    use_buddi4: True if BuDDI was trained using 4 latent spaces, otherwise false (3 latent spaces)
+
+    """
 
     if use_buddi4:
         fig, axs = plt.subplots(6, 2, figsize=(15,25))
@@ -226,6 +279,12 @@ def make_loss_fig(cv_loss_df, val_loss_df, use_buddi4=True):
 
 def make_spearman_val_fig(spr_loss_df):
 
+    """
+    Plot the Spearman correlation between the true and estimated cell-type proportions over trainig epochs
+
+    spr_loss_df: loss dataframe after converting to a pandas dataframe using make_loss_df
+
+    """
 
     fig, axs = plt.subplots(2, figsize=(10,5))
 
@@ -239,6 +298,24 @@ def make_spearman_val_fig(spr_loss_df):
 def plot_latent_spaces_buddi4(encoder_unlab, classifier,
         X_temp, Y_temp, label_temp, perturb_temp, bulk_temp, 
         batch_size, hide_sample_ids=False, alpha=1):
+
+
+    """
+    Plot PCA of latent spaces, colored by sources of variation, BuDDI is assumed to have 4 latent spaces
+
+    encoder_unlab: BuDDI unsupervised encoder
+    classifier: BuDDI cell-type proportion estimator 
+    X_temp: Normalized gene expression, assumed in the same order as expected by BuDDI
+    Y_temp: Cell type proportions
+    label_temp: smaple IDs
+    perturb_temp: perturbation IDs
+    bulk_temp: array indicating bulk or sc 
+    batch_size: batch size
+    hide_sample_ids: plot the sample ids or not
+    alpha: alpha value for points in plot  
+
+    """
+
 
     z_slack, mu_slack, _, z_rot, mu_rot, _, z_drug, mu_drug, _, z_bulk, mu_bulk, _ = encoder_unlab.predict(X_temp, batch_size=batch_size)
     prop_outputs = classifier.predict(X_temp, batch_size=batch_size)
@@ -298,6 +375,23 @@ def plot_latent_spaces_buddi4_umap(encoder_unlab, classifier,
         X_temp, Y_temp, label_temp, perturb_temp, bulk_temp, 
         batch_size, hide_sample_ids=False, alpha=1):
 
+    """
+    Plot UMAP of latent spaces, colored by sources of variation, BuDDI is assumed to use 4 latent spaces
+
+    encoder_unlab: BuDDI unsupervised encoder
+    classifier: BuDDI cell-type proportion estimator 
+    X_temp: Normalized gene expression, assumed in the same order as expected by BuDDI
+    Y_temp: Cell type proportions
+    label_temp: smaple IDs
+    perturb_temp: perturbation IDs
+    bulk_temp: array indicating bulk or sc 
+    batch_size: batch size
+    hide_sample_ids: plot the sample ids or not
+    alpha: alpha value for points in plot  
+
+    """
+
+
     z_slack, mu_slack, _, z_rot, mu_rot, _, z_drug, mu_drug, _, z_bulk, mu_bulk, _ = encoder_unlab.predict(X_temp, batch_size=batch_size)
     prop_outputs = classifier.predict(X_temp, batch_size=batch_size)
 
@@ -356,6 +450,22 @@ def plot_latent_spaces_buddi3(encoder_unlab, classifier,
         X_temp, Y_temp, label_temp, perturb_temp, bulk_temp, 
         batch_size, alpha=1):
 
+
+    """
+    Plot PCA of latent spaces, colored by sources of variation, BuDDI is assumed to have 3 latent spaces
+
+    encoder_unlab: BuDDI unsupervised encoder
+    classifier: BuDDI cell-type proportion estimator 
+    X_temp: Normalized gene expression, assumed in the same order as expected by BuDDI
+    Y_temp: Cell type proportions
+    label_temp: smaple IDs
+    perturb_temp: perturbation IDs
+    bulk_temp: array indicating bulk or sc 
+    batch_size: batch size
+    alpha: alpha value for points in plot  
+
+    """
+
     z_slack, mu_slack, _, z_rot, mu_rot, _, z_bulk, mu_bulk, _ = encoder_unlab.predict(X_temp, batch_size=batch_size)
     prop_outputs = classifier.predict(X_temp, batch_size=batch_size)
 
@@ -410,6 +520,22 @@ def plot_latent_spaces_buddi3_umap(encoder_unlab, classifier,
         X_temp, Y_temp, label_temp, perturb_temp, bulk_temp, 
         batch_size, alpha=1):
 
+
+    """
+    Plot TSNE of latent spaces, colored by sources of variation, BuDDI is assumed to have 3 latent spaces
+
+    encoder_unlab: BuDDI unsupervised encoder
+    classifier: BuDDI cell-type proportion estimator 
+    X_temp: Normalized gene expression, assumed in the same order as expected by BuDDI
+    Y_temp: Cell type proportions
+    label_temp: smaple IDs
+    perturb_temp: perturbation IDs
+    bulk_temp: array indicating bulk or sc 
+    batch_size: batch size
+    alpha: alpha value for points in plot  
+
+    """
+
     z_slack, mu_slack, _, z_rot, mu_rot, _, z_bulk, mu_bulk, _ = encoder_unlab.predict(X_temp, batch_size=batch_size)
     prop_outputs = classifier.predict(X_temp, batch_size=batch_size)
 
@@ -463,6 +589,25 @@ def plot_latent_spaces(encoder_unlab, classifier,
         batch_size=500, use_buddi4=True, use_pca=True, hide_sample_ids=False,
         alpha=1):
     
+
+    """
+    Plot PCA or TSNE of latent spaces, colored by sources of variation
+
+    encoder_unlab: BuDDI unsupervised encoder
+    classifier: BuDDI cell-type proportion estimator 
+    X_temp: Normalized gene expression, assumed in the same order as expected by BuDDI
+    Y_temp: Cell type proportions
+    label_temp: smaple IDs
+    perturb_temp: perturbation IDs
+    bulk_temp: array indicating bulk or sc 
+    batch_size: batch size
+    use_buddi4: Whether BuDDI has 3 or 4 latent spaces
+    use_pca: whether to use PCA or TSNE
+    hide_sample_ids: hide sample IDs during plotting
+    alpha: alpha value for points in plot  
+
+    """
+
     if use_pca:
         if use_buddi4:
             res = plot_latent_spaces_buddi4(encoder_unlab, classifier, X_temp, Y_temp, label_temp, perturb_temp, bulk_temp, batch_size, hide_sample_ids, alpha=alpha)
@@ -480,6 +625,24 @@ def plot_latent_spaces(encoder_unlab, classifier,
 def plot_reconstruction_buddi(encoder_unlab, classifier, decoder,
         X_temp, Y_temp, label_temp, perturb_temp, 
         batch_size=500, use_buddi4=True):
+
+
+    """
+    Plot reconstruction results of BuDDI
+
+    encoder_unlab: BuDDI unsupervised encoder
+    classifier: BuDDI cell-type proportion estimator 
+    decoder: BuDDI decoder
+    X_temp: Normalized gene expression, assumed in the same order as expected by BuDDI
+    Y_temp: Cell type proportions
+    label_temp: smaple IDs
+    perturb_temp: perturbation IDs
+    bulk_temp: array indicating bulk or sc 
+    batch_size: batch size
+    use_buddi4: Whether BuDDI has 3 or 4 latent spaces
+
+    """
+
 
     prop_outputs = classifier.predict(X_temp, batch_size=batch_size)
 
@@ -528,6 +691,23 @@ def plot_reconstruction_buddi(encoder_unlab, classifier, decoder,
 def calc_buddi_perturbation_sample_specific(meta_df, X_full, Y_full, sample_interest, scaler, 
                             encoder_unlab, decoder, batch_size, 
                             genes_ordered, top_lim=100, use_buddi4=True):
+
+    """
+    Estimate sample-specific perturbation response for BuDDI
+
+    meta_df: pandas dataframe of the metadata associated with X_full and Y_full
+    X_full: Normalized gene expression, assumed in the same order as expected by BuDDI
+    Y_full: Cell type proportions
+    sample_interest: that sample ID to perturb
+    encoder_unlab: BuDDI unsupervised encoder
+    decoder: BuDDI decoder
+    batch_size: batch size
+    genes_ordered: the gene IDs matching the genes in X_full, which should also be in the same order as BuDDI
+    top_lim: how many genes to report as top perturbed
+    use_buddi4: Whether BuDDI has 3 or 4 latent spaces
+
+    """
+
 
     tot_simulated_sample = Y_full.shape[1]*len(sample_interest)*100
 
@@ -650,6 +830,23 @@ def calc_buddi_perturbation_sample_specific(meta_df, X_full, Y_full, sample_inte
 def calc_buddi_perturbation(meta_df, X_full, Y_full, scaler, 
                             encoder_unlab, decoder, batch_size, 
                             genes_ordered, top_lim=100, use_buddi4=True):
+ 
+    """
+    Plot general perturbation response for BuDDI. 
+    We couple all latents spaces except for the perturbation effect during sampling.
+
+    meta_df: pandas dataframe of the metadata associated with X_full and Y_full
+    X_full: Normalized gene expression, assumed in the same order as expected by BuDDI
+    Y_full: Cell type proportions
+    scaler: the scaler used during normalization
+    encoder_unlab: BuDDI unsupervised encoder
+    decoder: BuDDI decoder
+    batch_size: batch size
+    genes_ordered: the gene IDs matching the genes in X_full, which should also be in the same order as BuDDI
+    top_lim: how many genes to report as top perturbed
+    use_buddi4: Whether BuDDI has 3 or 4 latent spaces
+
+    """
 
     # get the training data
     # so we can use it to get the latent codes
@@ -759,6 +956,30 @@ def train_buddi(res_data_path, exp_id, use_buddi4,
                 X_kp, y_kp, label_kp, drug_kp, bulk_kp,
                 params: BuddiTrainParameters=default_params):
     
+
+    """
+    Train BuDDI
+
+    res_data_path: path to write out the trained models
+    exp_id: experiment ID used in generating pseudobulks
+    use_buddi4: Whether BuDDI has 3 or 4 latent spaces
+    n_tot_samples: number of samples
+    n_drugs: number of drug states (length of 1-hot encoded vector of drug IDs)
+    n_tech: number of technologies, sc+bulk = 2
+    X_unkp: gene expression of bulks (unknown proportions)
+    label_unkp: bulk sample IDs
+    drug_unkp: bulk drug status 
+    bulk_unkp: bulk IDs ( should always be 1)
+    X_kp: gene expression of pseudobulks (known proportions)
+    y_kp: cell type proportions of pseudobulks
+    label_kp: sample IDs of pseudobulks
+    drug_kp: drug status of pseudobulks
+    bulk_kp: bulk IDs (should always be 0)
+    params: remaining BuddiTrainParameters
+
+    """
+
+
     # set seeds
     from numpy.random import seed
     seed(1)
@@ -881,28 +1102,3 @@ class BuddiSimulateParameters:
 def simulate_perturbations(params: BuddiSimulateParameters):
     pass
 
-
-# # ===============================================================
-# # === entrypoint
-# # ===============================================================
-
-# if __name__ == "__main__":
-#     # read in arguments
-#     parser = ArgumentParser()
-#     parser.add_argument("-res", "--res_data_path", dest="res_data_path",
-#                         help="path to write DIVA results")
-#     parser.add_argument("-exp", "--exp_id",
-#                         dest="exp_id",
-#                         help="ID for results")
-#     parser.add_argument("-n", "--num_genes",
-#                         dest="num_genes", type=int,
-#                         help="Number of features (genes) for VAE")
-#     parser.add_argument("-hd", "--hyp_dict",
-#                         dest="hyp_dict", type=int,
-#                         help="Dictionary of hyperparameters")
-
-#     args = parser.parse_args()
-
-#     params = BuddiParameters(
-#         n_label_z=args
-#     )

@@ -1,3 +1,16 @@
+"""
+This is the script that contains the model generation and training code for BuDDI, 
+which is called by the interface buddi.py
+buddi3 has 3 latent spaces other than the slack space. 
+Currently it is assumed that the perturbation space is missing, but 
+since each latent space other than cell-type proportion is interchangable, 
+you can remove any latent space you like.
+
+Future work will make the latent space removed more general.
+
+"""
+
+
 # general imports
 import warnings
 import numpy as np

@@ -1,3 +1,10 @@
+"""
+This is the script that contains the model generation and training code for BuDDI, 
+which is called by the interface buddi.py
+buddi4 has 4 latent spaces other than the slack space.
+This is the full model used in the BuDDI manuscript. 
+"""
+
 # general imports
 import warnings
 import numpy as np
