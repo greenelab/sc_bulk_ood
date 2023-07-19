@@ -807,7 +807,7 @@ def calc_buddi_perturbation_sample_specific(meta_df, X_full, Y_full, sample_inte
         proj_ctrl = decoded_0_0[curr_idx]
         proj_stim = decoded_0_1[curr_idx]
 
-        # take the median for nomalization
+        # take the median for normalization
 
         proj_ctrl = np.median(rankdata(proj_ctrl, axis=1), axis=0)
         proj_stim = np.median(rankdata(proj_stim, axis=1), axis=0)
