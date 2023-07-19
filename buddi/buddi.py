@@ -716,7 +716,7 @@ def calc_buddi_perturbation_sample_specific(meta_df, X_full, Y_full, sample_inte
     #####
     # get cell type latent codes
     #####
-    # the the codes for cell type proportion
+    # the codes for cell type proportion
     # and tile to repeat for each sample
     sc_props = sc_preprocess.get_single_celltype_prop_matrix(num_samp=100, cell_order=Y_full.columns)
     sc_props = np.tile(sc_props, (len(sample_interest),1))
