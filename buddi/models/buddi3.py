@@ -72,6 +72,11 @@ def fit_model(known_prop_vae, unknown_prop_vae, encoder_unlab, encoder_lab, deco
     meta_hist = []
 
     # make test train split
+    # This creates a train-validation set. This 20% of the data is only used for 
+    # understanding how well BuDDI is training and for QC purposes.
+    # in the future I will add a flag to toggle is this is wanted or not
+    # for now, it is reccommended to train buddi several times and 
+    # compare the different models to one another
     unkp_idx_train = np.random.choice(range(X_unknown_prop.shape[0]), np.ceil(X_unknown_prop.shape[0]*0.8).astype(int), replace=False)
     kp_idx_train = np.random.choice(range(X_known_prop.shape[0]), np.ceil(X_known_prop.shape[0]*0.8).astype(int), replace=False)
 
